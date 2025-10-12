@@ -22,4 +22,35 @@ enum PostProductCodes: int
     case PaketLightIntNonBoxableOutbound = 69;
     case Kleinpaket2000 = 96;
     case Kleinpaket2000Plus = 16;
+
+    public function isDomestic(): bool
+    {
+        return match ($this) {
+            self::RetourpaketInternational,
+            self::PaketPremiumInternational,
+            self::CombiFreightInternational,
+            self::PostExpressInternational,
+            self::PaketPlusIntOutbound,
+            self::PaketLightIntNonBoxableOutbound => false,
+            default => true,
+        };
+    }
+
+    public function requiresWeight(): bool
+    {
+        return match ($this) {
+            self::RetourpaketInternational,
+            self::PaketPlusIntOutbound,
+            self::PaketPremiumInternational => true,
+            default => false,
+        };
+    }
+
+    public function forBusinessOnly(): bool
+    {
+        return match ($this) {
+            self::PaketPremiumOesterreichB2B => true,
+            default => false,
+        };
+    }
 }

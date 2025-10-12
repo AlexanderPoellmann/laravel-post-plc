@@ -44,6 +44,8 @@ use AlexanderPoellmann\LaravelPostPlc\Classes\Address;
 use AlexanderPoellmann\LaravelPostPlc\Classes\Collo;
 use AlexanderPoellmann\LaravelPostPlc\Classes\Shipment;
 use AlexanderPoellmann\LaravelPostPlc\Facades\LaravelPostPlc;
+use AlexanderPoellmann\LaravelPostPlc\Enums\PostProductCodes;
+use AlexanderPoellmann\LaravelPostPlc\Enums\ServiceMethods;
 
 $from = (new Address())
     ->id(sprintf('%05d', mt_rand(1, 10000)))
@@ -72,8 +74,8 @@ $shipment = (new Shipment())
     ->from($from)
     ->to($to)
     ->parcels([
-        (new Collo())->weight(0.4)->get(),
-        (new Collo())->weight(5.2)->get(),
+        (new Collo)->weight(0.4)->get(),
+        (new Collo)->weight(5.2)->get(),
     ])->get();
 
 LaravelPostPlc::call(ServiceMethods::ImportShipment, $shipment, true);
@@ -81,7 +83,21 @@ LaravelPostPlc::call(ServiceMethods::ImportShipment, $shipment, true);
 $object = LaravelPostPlc::toCollection();
 
 dd($object);
+```
 
+The `PostProductCodes` enum has a few helper methods to make it easier to decide which options you might show to your users, when creating shipments:
+
+```php
+use AlexanderPoellmann\LaravelPostPlc\Enums\PostProductCodes;
+
+// check whether the selected product is available for Austrian addresses only
+$isDomestic = PostProductCodes::PaketOesterreich->isDomestic();
+
+// check whether the selected product requires you to specify its weight
+$requiresWeight = PostProductCodes::PaketPremiumInternational->requiresWeight();
+
+// check whether the selected product is available only for business-to-business shipments
+$forBusinessOnly = PostProductCodes::PaketPremiumOesterreichB2B->forBusinessOnly();
 ```
 
 ## Testing
