@@ -71,6 +71,13 @@ class Shipment extends PlcBase
         return $this;
     }
 
+    public function withFeatures(array $features): self
+    {
+        $this->add('FeatureList', $features);
+
+        return $this;
+    }
+
     public function get(): ShipmentRow
     {
         return ShipmentRow::from($this->row);

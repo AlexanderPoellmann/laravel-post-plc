@@ -13,20 +13,7 @@ You can install the package via composer:
 composer require alexanderpoellmann/laravel-post-plc
 ```
 
-You can publish and run the migrations with:
-
-```bash
-php artisan vendor:publish --tag="laravel-post-plc-migrations"
-php artisan migrate
-```
-
-You can publish the config file with:
-
-```bash
-php artisan vendor:publish --tag="laravel-post-plc-config"
-```
-
-Finally, add the following entry to your `services.php` config file:
+Add the following entry to your `config/services.php` file:
 
 ```php
     'post-plc' => [
@@ -45,6 +32,8 @@ use AlexanderPoellmann\LaravelPostPlc\Classes\Collo;
 use AlexanderPoellmann\LaravelPostPlc\Classes\Shipment;
 use AlexanderPoellmann\LaravelPostPlc\Facades\LaravelPostPlc;
 use AlexanderPoellmann\LaravelPostPlc\Enums\PostProductCodes;
+use AlexanderPoellmann\LaravelPostPlc\Enums\Features;
+use AlexanderPoellmann\LaravelPostPlc\DataTransferObjects\FeatureRow;
 use AlexanderPoellmann\LaravelPostPlc\Enums\ServiceMethods;
 
 $from = (new Address())
@@ -73,6 +62,15 @@ $shipment = (new Shipment())
     ->using(PostProductCodes::PaketPremiumOesterreichB2B)
     ->from($from)
     ->to($to)
+    ->withFeatures([
+        FeatureRow::from([
+            'ThirdPartyID' => Features::CashOnDelivery,
+            'Value1' => '199.99', // Amount (decimal)
+            'Value2' => 'EUR',    // Currency (ISO code)
+            'Value3' => 'AT99 9999 9999 9999 9999|BICCODE|Muster GmbH', // IBAN|BIC|Account holder
+            'Value4' => 'Order #12345', // Payment reference
+        ]),
+    ])
     ->parcels([
         (new Collo)->weight(0.4)->get(),
         (new Collo)->weight(5.2)->get(),
