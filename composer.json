@@ -36,8 +36,7 @@
     },
     "autoload": {
         "psr-4": {
-            "AlexanderPoellmann\\LaravelPostPlc\\": "src/",
-            "AlexanderPoellmann\\LaravelPostPlc\\Database\\Factories\\": "database/factories/"
+            "AlexanderPoellmann\\LaravelPostPlc\\": "src/"
         }
     },
     "autoload-dev": {
