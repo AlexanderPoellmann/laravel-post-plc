@@ -80,7 +80,7 @@ LaravelPostPlc::call(ServiceMethods::ImportShipment, $shipment, true);
 
 $object = LaravelPostPlc::toCollection();
 
-dd($object);
+ray($object);
 ```
 
 The `PostProductCodes` enum has a few helper methods to make it easier to decide which options you might show to your users, when creating shipments:
@@ -96,6 +96,23 @@ $requiresWeight = PostProductCodes::PaketPremiumInternational->requiresWeight();
 
 // check whether the selected product is available only for business-to-business shipments
 $forBusinessOnly = PostProductCodes::PaketPremiumOesterreichB2B->forBusinessOnly();
+```
+
+The `FeatureRow` enum has a few helper methods as well, here are some examples:
+
+```php
+FeatureRow::cashOnDelivery(
+    amount: '199.99',
+    currency: 'EUR',
+    iban: 'AT99 9999 9999 9999 9999',
+    bic: 'ABCDEFFXXX',
+    accountHolder: 'Muster GmbH',
+    paymentReference: 'Order #12345',
+]);
+
+FeatureRow::fragile()
+
+FeatureRow::personalDelivery()
 ```
 
 ## Testing
