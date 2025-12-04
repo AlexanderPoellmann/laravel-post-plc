@@ -30,7 +30,7 @@ class LaravelPostPlc
 
     public function __construct()
     {
-        $this->identifier = config('services.post-plc.identifier', env('APP_NAME', 'Laravel-Post-PLC'));
+        $this->identifier = config('services.post-plc.identifier', config('app.name', 'Laravel-Post-PLC'));
         $this->client_id = config('services.post-plc.client-id');
         $this->org_unit_id = config('services.post-plc.org-unit-id');
         $this->org_unit_guid = config('services.post-plc.org-unit-guid');
