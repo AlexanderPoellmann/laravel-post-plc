@@ -7,7 +7,9 @@ namespace AlexanderPoellmann\LaravelPostPlc\Support;
 use AlexanderPoellmann\LaravelPostPlc\Enums\PostProductCodes;
 use BackedEnum;
 use DateTimeInterface;
+use Illuminate\Contracts\Support\Arrayable;
 use Spatie\LaravelData\Data;
+use Spatie\LaravelData\DataCollection;
 use UnitEnum;
 
 final class PayloadNormalizer
@@ -40,7 +42,7 @@ final class PayloadNormalizer
 
     private static function normalize(mixed $value, bool $removeNulls): mixed
     {
-        if ($value instanceof Data) {
+        if ($value instanceof Data || $value instanceof DataCollection || $value instanceof Arrayable) {
             return self::normalize($value->toArray(), $removeNulls);
         }
 
@@ -78,6 +80,6 @@ final class PayloadNormalizer
             $normalized[$key] = self::normalize($item, $removeNulls);
         }
 
-        return $normalized;
+        return $removeNulls && array_is_list($value) ? array_values($normalized) : $normalized;
     }
 }

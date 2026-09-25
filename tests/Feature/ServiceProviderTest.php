@@ -5,10 +5,31 @@ declare(strict_types=1);
 use AlexanderPoellmann\LaravelPostPlc\Configuration\PlcConfiguration;
 use AlexanderPoellmann\LaravelPostPlc\Contracts\CustomsRequirementResolver;
 use AlexanderPoellmann\LaravelPostPlc\Contracts\PlcTransport;
+use AlexanderPoellmann\LaravelPostPlc\Enums\ServiceMethods;
+use AlexanderPoellmann\LaravelPostPlc\Facades\LaravelPostPlc as PlcFacade;
 use AlexanderPoellmann\LaravelPostPlc\LaravelPostPlc;
 use AlexanderPoellmann\LaravelPostPlc\Resolvers\AllowedServicesResolver;
+use AlexanderPoellmann\LaravelPostPlc\Tests\Support\FakePlcTransport;
 use AlexanderPoellmann\LaravelPostPlc\Validation\PickupOrderValidator;
 use AlexanderPoellmann\LaravelPostPlc\Validation\ShipmentValidator;
+
+it('shares the client within a scope and discards response state between scopes', function (): void {
+    app()->instance(PlcTransport::class, FakePlcTransport::responding(['pdfData' => 'private-label']));
+    $client = app(LaravelPostPlc::class);
+    $resolver = app(AllowedServicesResolver::class);
+
+    PlcFacade::request(ServiceMethods::ImportShipment, []);
+
+    expect(PlcFacade::getResponse())->toBe($client->getResponse())
+        ->and(app(LaravelPostPlc::class))->toBe($client);
+
+    app()->forgetScopedInstances();
+
+    expect(app(LaravelPostPlc::class))->not->toBe($client)
+        ->and(app(AllowedServicesResolver::class))->not->toBe($resolver)
+        ->and(PlcFacade::getResponse())->toBeNull()
+        ->and(PlcFacade::lastMethod())->toBeNull();
+});
 
 it('loads package config and registers package services', function (): void {
     expect(config('post-plc.endpoints.production'))->toBeString()

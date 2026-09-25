@@ -23,6 +23,8 @@ class Address extends PlcBase
     /** @param list<string> $names */
     public function names(array $names): self
     {
+        unset($this->row['Name1'], $this->row['Name2'], $this->row['Name3'], $this->row['Name4']);
+
         foreach (array_slice(array_values($names), 0, 4) as $index => $name) {
             $this->add('Name'.($index + 1), $name);
         }
@@ -33,6 +35,7 @@ class Address extends PlcBase
     public function street(string $street): self
     {
         $street = trim($street);
+        unset($this->row['HouseNumber']);
 
         if (preg_match('/^(.+?)\s+(\d+[[:alnum:]\/\.\-]*)$/u', $street, $matches) === 1) {
             return $this->route(trim($matches[1]))->streetNumber(trim($matches[2]));

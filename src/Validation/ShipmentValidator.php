@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace AlexanderPoellmann\LaravelPostPlc\Validation;
 
 use AlexanderPoellmann\LaravelPostPlc\Contracts\CustomsRequirementResolver;
-use AlexanderPoellmann\LaravelPostPlc\DataTransferObjects\AddressRow;
 use AlexanderPoellmann\LaravelPostPlc\DataTransferObjects\ColloArticleRow;
 use AlexanderPoellmann\LaravelPostPlc\DataTransferObjects\FeatureRow;
 use AlexanderPoellmann\LaravelPostPlc\DataTransferObjects\ShipmentRow;
@@ -17,22 +16,25 @@ use AlexanderPoellmann\LaravelPostPlc\Resolvers\AllowedServices;
 
 final readonly class ShipmentValidator
 {
-    public function __construct(private CustomsRequirementResolver $customsRequirementResolver) {}
+    public function __construct(
+        private CustomsRequirementResolver $customsRequirementResolver,
+        private AddressValidator $addressValidator = new AddressValidator,
+    ) {}
 
     public function validate(ShipmentRow $shipment, ?AllowedServices $allowedServices = null): ValidationResult
     {
         $result = new ValidationResult;
 
         $this->validateCredentials($shipment, $result);
-        $this->validateAddress($shipment->OURecipientAddress, 'OURecipientAddress', $result);
+        $result->merge($this->addressValidator->validate($shipment->OURecipientAddress, 'OURecipientAddress'));
         $this->validateShipmentFields($shipment, $result);
 
         if ($shipment->OUShipperAddress !== null) {
-            $this->validateAddress($shipment->OUShipperAddress, 'OUShipperAddress', $result);
+            $result->merge($this->addressValidator->validate($shipment->OUShipperAddress, 'OUShipperAddress'));
         }
 
         if ($shipment->AlternativeReturnOrgUnitAddress !== null) {
-            $this->validateAddress($shipment->AlternativeReturnOrgUnitAddress, 'AlternativeReturnOrgUnitAddress', $result);
+            $result->merge($this->addressValidator->validate($shipment->AlternativeReturnOrgUnitAddress, 'AlternativeReturnOrgUnitAddress'));
         }
 
         $this->validateProduct($shipment, $allowedServices, $result);
@@ -137,7 +139,7 @@ final readonly class ShipmentValidator
             );
         }
 
-        if ($allowedServices !== null && ! $allowedServices->isEmpty() && ! $allowedServices->allowsProduct($product)) {
+        if ($allowedServices !== null && ! $allowedServices->allowsProduct($product)) {
             $result->add(
                 '10055',
                 'DeliveryServiceThirdPartyID',
@@ -175,7 +177,6 @@ final readonly class ShipmentValidator
             $this->validateFeatureValues($feature, $shipment, $path, $result);
 
             if ($allowedServices !== null
-                && ! $allowedServices->isEmpty()
                 && $allowedServices->allowsProduct($shipment->DeliveryServiceThirdPartyID)
                 && ! $allowedServices->allowsFeature($shipment->DeliveryServiceThirdPartyID, $feature->ThirdPartyID)) {
                 $result->add(
@@ -383,82 +384,6 @@ final readonly class ShipmentValidator
 
         if ($article->ConsumerUnitNetWeight === null || $article->ConsumerUnitNetWeight <= 0) {
             $result->add('10076', $path.'.ConsumerUnitNetWeight', 'ConsumerUnitNetWeight must be greater than zero.');
-        }
-    }
-
-    private function validateAddress(AddressRow $address, string $path, ValidationResult $result): void
-    {
-        $required = [
-            'Name1' => $address->Name1,
-            'AddressLine1' => $address->AddressLine1,
-            'PostalCode' => $address->PostalCode,
-            'CountryID' => $address->CountryID,
-            'City' => $address->City,
-        ];
-
-        foreach ($required as $field => $value) {
-            if (trim($value) === '') {
-                $result->add('address.required', $path.'.'.$field, $field.' is required.');
-            }
-        }
-
-        if (! preg_match('/^[A-Z]{2}$/', $address->countryCode())) {
-            $result->add('address.country', $path.'.CountryID', 'CountryID must be a two-letter ISO country code.');
-        }
-
-        if ($address->Email !== null && $address->Email !== '' && filter_var($address->Email, FILTER_VALIDATE_EMAIL) === false) {
-            $result->add('address.email', $path.'.Email', 'Email must contain a valid email address.');
-        }
-
-        $limits = [
-            'ThirdPartyID' => 20,
-            'VatId' => 20,
-            'Name1' => 100,
-            'Name2' => 100,
-            'Name3' => 50,
-            'Name4' => 50,
-            'AddressLine1' => 60,
-            'HouseNumber' => 20,
-            'AddressLine2' => 60,
-            'PostalCode' => 15,
-            'CountryID' => 2,
-            'City' => 100,
-            'Tel1' => 100,
-            'Tel2' => 100,
-            'Fax' => 100,
-            'Email' => 100,
-            'Homepage' => 100,
-            'EORINumber' => 17,
-            'PersonalTaxNumber' => 20,
-        ];
-
-        $values = [
-            'ThirdPartyID' => $address->ThirdPartyID,
-            'VatId' => $address->VatId,
-            'Name1' => $address->Name1,
-            'Name2' => $address->Name2,
-            'Name3' => $address->Name3,
-            'Name4' => $address->Name4,
-            'AddressLine1' => $address->AddressLine1,
-            'HouseNumber' => $address->HouseNumber,
-            'AddressLine2' => $address->AddressLine2,
-            'PostalCode' => $address->PostalCode,
-            'CountryID' => $address->CountryID,
-            'City' => $address->City,
-            'Tel1' => $address->Tel1,
-            'Tel2' => $address->Tel2,
-            'Fax' => $address->Fax,
-            'Email' => $address->Email,
-            'Homepage' => $address->Homepage,
-            'EORINumber' => $address->EORINumber,
-            'PersonalTaxNumber' => $address->PersonalTaxNumber,
-        ];
-
-        foreach ($limits as $field => $limit) {
-            $value = $values[$field];
-            if ($value !== null && mb_strlen($value) > $limit) {
-                $result->add('address.max_length', $path.'.'.$field, sprintf('%s may not exceed %d characters.', $field, $limit));
-            }
         }
     }
 

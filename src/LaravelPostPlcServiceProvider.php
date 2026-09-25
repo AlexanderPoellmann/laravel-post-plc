@@ -29,19 +29,14 @@ class LaravelPostPlcServiceProvider extends PackageServiceProvider
         $this->app->singleton(PlcTransport::class, SoapPlcTransport::class);
         $this->app->singleton(CustomsRequirementResolver::class, EuCustomsRequirementResolver::class);
 
-        $this->app->singleton(LaravelPostPlc::class, fn ($app): LaravelPostPlc => new LaravelPostPlc(
+        $this->app->scoped(LaravelPostPlc::class, fn ($app): LaravelPostPlc => new LaravelPostPlc(
             configuration: PlcConfiguration::fromConfig(),
             transport: $app->make(PlcTransport::class),
         ));
 
         $this->app->singleton(PickupOrderValidator::class);
 
-        $this->app->singleton(ShipmentValidator::class, fn ($app): ShipmentValidator => new ShipmentValidator(
-            $app->make(CustomsRequirementResolver::class),
-        ));
-
-        $this->app->singleton(AllowedServicesResolver::class, fn ($app): AllowedServicesResolver => new AllowedServicesResolver(
-            $app->make(LaravelPostPlc::class),
-        ));
+        $this->app->singleton(ShipmentValidator::class);
+        $this->app->scoped(AllowedServicesResolver::class);
     }
 }

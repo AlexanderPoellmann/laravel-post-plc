@@ -9,6 +9,15 @@ use AlexanderPoellmann\LaravelPostPlc\LaravelPostPlc;
 use AlexanderPoellmann\LaravelPostPlc\Resolvers\AllowedServicesResolver;
 use AlexanderPoellmann\LaravelPostPlc\Tests\Support\FakePlcTransport;
 
+it('rejects malformed country codes before making a request', function (string $country): void {
+    $transport = FakePlcTransport::responding();
+    $client = new LaravelPostPlc(transport: $transport);
+
+    expect(fn () => (new AllowedServicesResolver($client))->forCountries($country))
+        ->toThrow(InvalidArgumentException::class);
+    expect($transport->calls)->toBe([]);
+})->with(['', ' ', 'AUT', 'A1', 'A']);
+
 it('calls PLC product discovery with typed credentials and normalized countries', function (): void {
     $transport = FakePlcTransport::responding([
         'CarrierServiceRow' => [

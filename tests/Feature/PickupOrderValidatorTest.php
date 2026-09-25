@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use AlexanderPoellmann\LaravelPostPlc\DataTransferObjects\AddressRow;
 use AlexanderPoellmann\LaravelPostPlc\DataTransferObjects\PickupDateTimeWindowRow;
 use AlexanderPoellmann\LaravelPostPlc\DataTransferObjects\PickupOrderRow;
 use AlexanderPoellmann\LaravelPostPlc\Enums\PickupLocationTypes;
@@ -25,6 +26,21 @@ it('accepts package counts at the allowed boundaries', function (int $packages):
 
     expect(app(PickupOrderValidator::class)->validate($order)->errors())->toBe([]);
 })->with([1, 5]);
+
+it('validates the pickup address using the same rules as shipments', function (): void {
+    $address = AddressRow::from(array_replace(
+        ShipmentFixtures::address()->toArray(),
+        ['PostalCode' => '', 'Email' => 'invalid'],
+    ));
+    $order = PickupOrderRow::from(array_replace($this->order, ['PickupAddress' => $address]));
+
+    $errors = app(PickupOrderValidator::class)->validate($order)->errors();
+
+    expect(array_map(fn ($error) => [$error->code, $error->path], $errors))->toBe([
+        ['address.required', 'PickupAddress.PostalCode'],
+        ['address.email', 'PickupAddress.Email'],
+    ]);
+});
 
 it('reports each invalid pickup field independently', function (array $changes, string $code, string $path): void {
     $order = PickupOrderRow::from(array_replace($this->order, $changes));

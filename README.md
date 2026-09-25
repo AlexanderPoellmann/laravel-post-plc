@@ -128,6 +128,8 @@ Examples covered by local validation include:
 
 Each error has a machine-friendly `code`, a `path`, and a human-readable `message`. Where a PLC error code maps cleanly to the preflight rule, that PLC code is used.
 
+`AddressValidator` contains the shared address rules. You can use it directly with `app(AddressValidator::class)->validate($address)`; both `ShipmentValidator` and `PickupOrderValidator` also apply these rules to their addresses.
+
 ## Resolve customer-specific allowed products and features
 
 Some compatibility rules depend on the PLC contract/customer configuration and cannot be reliably hard-coded. Query PLC first and combine that result with the local validator:
@@ -143,6 +145,8 @@ $validation->throwIfInvalid();
 ```
 
 `AllowedServicesResolver` uses PLC's `GetAllowedServicesForCountry` service. The actual shipment import remains authoritative for postcode-level, contract-level, and other server-side rules that are not exposed by product discovery.
+
+Omit the allowed-services argument (or pass `null`) to run only local checks. An explicitly supplied empty discovery result allows no products and produces validation error `10055`. Discovery rejects malformed country codes before sending a request.
 
 ## Customs articles
 
@@ -188,6 +192,10 @@ $data = LaravelPostPlc::toArray();
 ```
 
 For custom response DTOs, use `LaravelPostPlc::toData(YourData::class)`. `toObject()` remains available for the shipment import methods with built-in response DTOs.
+
+The client retains only the most recent call's response within the current Laravel request or queue job. Starting another call clears the previous response, including when serialization or transport fails. After a failed call, `getResponse()` returns `null`, `toArray()` returns an empty array, and `toObject()` throws a `LogicException`. Transport exceptions propagate to the caller.
+
+Array requests may contain nested Laravel collections and Spatie data collections. Normalization preserves their contents, removes null request values, and keeps list indexes consecutive. Response normalization retains null values.
 
 ## Product and feature helpers
 

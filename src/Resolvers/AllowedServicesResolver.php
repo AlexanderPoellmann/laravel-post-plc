@@ -28,6 +28,12 @@ final readonly class AllowedServicesResolver
             throw new InvalidArgumentException('At least one destination country is required.');
         }
 
+        foreach ($countryList as $country) {
+            if (preg_match('/^[A-Z]{2}$/D', $country) !== 1) {
+                throw new InvalidArgumentException('Destination countries must be two-letter ISO country codes.');
+            }
+        }
+
         if (in_array('AT', $countryList, true) && count($countryList) > 1) {
             throw new InvalidArgumentException('PLC does not allow Austria to be combined with other countries in product discovery.');
         }

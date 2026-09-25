@@ -1,16 +1,18 @@
 {
     "name": "alexanderpoellmann/laravel-post-plc",
-    "description": "A laravel integration for the Austrian Post Label Center (Österreichische Post).",
+    "description": "A Laravel integration for the Austrian Post Label Center (Österreichische Post).",
     "keywords": [
         "laravel",
-        "laravel-post-plc"
+        "laravel-post-plc",
+        "austrian-post",
+        "post-label-center"
     ],
     "homepage": "https://github.com/alexanderpoellmann/laravel-post-plc",
     "license": "MIT",
     "authors": [
         {
             "name": "Alexander Manfred Poellmann",
-            "homepage": "https://twitter.com/AMPoellmann",
+            "homepage": "https://github.com/alexanderpoellmann",
             "role": "Developer"
         }
     ],
@@ -43,23 +45,12 @@
     },
     "autoload-dev": {
         "psr-4": {
-            "AlexanderPoellmann\\LaravelPostPlc\\Tests\\": "tests/",
-            "Workbench\\App\\": "workbench/app/"
+            "AlexanderPoellmann\\LaravelPostPlc\\Tests\\": "tests/"
         }
     },
     "scripts": {
         "post-autoload-dump": "@composer run prepare",
-        "clear": "@php vendor/bin/testbench package:purge-laravel-post-plc --ansi",
         "prepare": "@php vendor/bin/testbench package:discover --ansi",
-        "build": [
-            "@composer run prepare",
-            "@php vendor/bin/testbench workbench:build --ansi"
-        ],
-        "start": [
-            "Composer\\Config::disableProcessTimeout",
-            "@composer run build",
-            "@php vendor/bin/testbench serve"
-        ],
         "analyse": "vendor/bin/phpstan analyse",
         "test": "vendor/bin/pest",
         "test-coverage": "vendor/bin/pest --coverage",

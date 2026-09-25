@@ -73,10 +73,12 @@ class LaravelPostPlc
      */
     public function request(ServiceMethods $method, Data|array $data, bool $asRow = false): Response
     {
+        $this->method = $method;
+        $this->response = null;
+
         $payload = PayloadNormalizer::request($data);
         $payload = $asRow ? ['row' => $payload] : $payload;
 
-        $this->method = $method;
         $this->response = $this->transport->call($this->endpoint(), $method, $payload);
 
         return $this->response;
@@ -132,6 +134,10 @@ class LaravelPostPlc
 
     public function toObject(): Data
     {
+        if ($this->response === null) {
+            throw new LogicException('No successful PLC response is available.');
+        }
+
         return match ($this->method) {
             ServiceMethods::ImportShipment => ImportShipmentResult::from($this->toArray()),
             ServiceMethods::ImportShipmentAndGenerateBarcode => ImportShipmentAndGenerateBarcodeResult::from($this->toArray()),

@@ -10,9 +10,11 @@ use AlexanderPoellmann\LaravelPostPlc\Enums\SecurePickupLocationTypes;
 
 final class PickupOrderValidator
 {
+    public function __construct(private readonly AddressValidator $addressValidator = new AddressValidator) {}
+
     public function validate(PickupOrderRow $order): ValidationResult
     {
-        $result = new ValidationResult;
+        $result = $this->addressValidator->validate($order->PickupAddress, 'PickupAddress');
 
         if ($order->NumberOfPackages !== null && ($order->NumberOfPackages < 1 || $order->NumberOfPackages > 5)) {
             $result->add('10090', 'NumberOfPackages', 'NumberOfPackages must be between 1 and 5.');

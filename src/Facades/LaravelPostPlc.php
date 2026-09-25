@@ -31,6 +31,8 @@ use Spatie\LaravelData\Data;
  */
 class LaravelPostPlc extends Facade
 {
+    protected static $cached = false;
+
     protected static function getFacadeAccessor(): string
     {
         return \AlexanderPoellmann\LaravelPostPlc\LaravelPostPlc::class;

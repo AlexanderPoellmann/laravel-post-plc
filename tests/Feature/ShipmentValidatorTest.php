@@ -13,6 +13,17 @@ use AlexanderPoellmann\LaravelPostPlc\Resolvers\AllowedServices;
 use AlexanderPoellmann\LaravelPostPlc\Tests\Support\ShipmentFixtures;
 use AlexanderPoellmann\LaravelPostPlc\Validation\ShipmentValidator;
 
+it('rejects a product when an explicitly supplied discovery result is empty', function (): void {
+    $shipment = (new Shipment)->using(PostProductCodes::PaketOesterreich)
+        ->to(ShipmentFixtures::address())->get();
+
+    $result = app(ShipmentValidator::class)->validate($shipment, AllowedServices::fromResponse([]));
+
+    expect($result->errors())->toHaveCount(1)
+        ->and($result->errors()[0]->code)->toBe('10055')
+        ->and($result->errors()[0]->path)->toBe('DeliveryServiceThirdPartyID');
+});
+
 it('accepts a valid domestic shipment', function (): void {
     $shipment = (new Shipment)
         ->using(PostProductCodes::PaketOesterreich)

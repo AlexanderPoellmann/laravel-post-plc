@@ -33,3 +33,20 @@ it('uses the PLC VATID field name on the wire', function (): void {
         ->toHaveKey('VATID', 'ATU12345678')
         ->not->toHaveKey('VatId');
 });
+
+it('replaces all name lines when the builder is reused', function (): void {
+    $address = $this->address->street('Main Street 1')
+        ->name('Old name', 'Old second line', 'Old third line', 'Old fourth line')
+        ->name('New name')
+        ->get();
+
+    expect([$address->Name1, $address->Name2, $address->Name3, $address->Name4])
+        ->toBe(['New name', null, null, null]);
+});
+
+it('clears a previous house number when replacing the full street', function (): void {
+    $address = $this->address->street('Main Street 1')->street('Postfach Hauptbahnhof')->get();
+
+    expect($address->AddressLine1)->toBe('Postfach Hauptbahnhof')
+        ->and($address->HouseNumber)->toBeNull();
+});
