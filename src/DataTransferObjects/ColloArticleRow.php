@@ -21,6 +21,8 @@ class ColloArticleRow extends Data
         public readonly ?string $CurrencyID,
         public readonly ?float $ConsumerUnitNetWeight,
         public readonly CustomsOptions $CustomsOptionID,
+        public readonly bool $DeclarationOfOrigin = false,
+        public readonly ?string $ColloNumberOriginExport = null,
     ) {}
 
     public static function documents(string $description, ?string $articleNumber = null): self
@@ -36,6 +38,7 @@ class ColloArticleRow extends Data
             CurrencyID: null,
             ConsumerUnitNetWeight: null,
             CustomsOptionID: CustomsOptions::Dokumente,
+            DeclarationOfOrigin: false,
         );
     }
 
@@ -62,6 +65,7 @@ class ColloArticleRow extends Data
             CurrencyID: strtoupper($currency),
             ConsumerUnitNetWeight: $netWeight,
             CustomsOptionID: $customsOption,
+            DeclarationOfOrigin: false,
         );
     }
 }

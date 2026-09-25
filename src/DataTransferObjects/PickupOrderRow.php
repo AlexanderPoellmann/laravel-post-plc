@@ -6,6 +6,7 @@ namespace AlexanderPoellmann\LaravelPostPlc\DataTransferObjects;
 
 use AlexanderPoellmann\LaravelPostPlc\Enums\PickupLocationTypes;
 use AlexanderPoellmann\LaravelPostPlc\Enums\SecurePickupLocationTypes;
+use Spatie\LaravelData\Attributes\MapName;
 use Spatie\LaravelData\Data;
 
 class PickupOrderRow extends Data
@@ -17,6 +18,7 @@ class PickupOrderRow extends Data
         public readonly ?int $NumberOfPackages,
         public readonly ?array $ShipmentNumberList,
         public readonly PickupLocationTypes $PickupLocationType,
+        #[MapName('SecurePickupLocationTypeID')]
         public readonly ?SecurePickupLocationTypes $SecurePickupLocationType,
         public readonly ?string $OtherSecurePickupLocation,
         public readonly string $ContactPersonName,

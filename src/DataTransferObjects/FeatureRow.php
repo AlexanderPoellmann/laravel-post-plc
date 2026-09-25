@@ -4,22 +4,30 @@ declare(strict_types=1);
 
 namespace AlexanderPoellmann\LaravelPostPlc\DataTransferObjects;
 
+use AlexanderPoellmann\LaravelPostPlc\Casts\FeatureCodeCast;
 use AlexanderPoellmann\LaravelPostPlc\Enums\Features;
+use AlexanderPoellmann\LaravelPostPlc\Transformers\FeatureCodeTransformer;
+use AlexanderPoellmann\LaravelPostPlc\ValueObjects\FeatureCode;
+use Spatie\LaravelData\Attributes\WithCast;
+use Spatie\LaravelData\Attributes\WithTransformer;
 use Spatie\LaravelData\Data;
 
 /** @phpstan-consistent-constructor */
 class FeatureRow extends Data
 {
     public function __construct(
-        public readonly Features $ThirdPartyID,
+        #[WithTransformer(FeatureCodeTransformer::class)]
+        #[WithCast(FeatureCodeCast::class)]
+        public readonly Features|FeatureCode|string $ThirdPartyID,
         public readonly ?string $Value1 = null,
         public readonly ?string $Value2 = null,
         public readonly ?string $Value3 = null,
         public readonly ?string $Value4 = null,
+        public readonly ?string $Name = null,
     ) {}
 
     public static function make(
-        Features $feature,
+        Features|FeatureCode|string $feature,
         int|float|string|null $value1 = null,
         int|float|string|null $value2 = null,
         int|float|string|null $value3 = null,
@@ -34,26 +42,19 @@ class FeatureRow extends Data
         );
     }
 
+    public function code(): FeatureCode
+    {
+        return FeatureCode::from($this->ThirdPartyID);
+    }
+
     public static function cashOnDelivery(int|float|string $amount, string $currency, string $iban, string $bic, string $accountHolder, string $paymentReference): static
     {
-        return self::make(
-            Features::CashOnDelivery,
-            $amount,
-            strtoupper($currency),
-            "$iban|$bic|$accountHolder",
-            $paymentReference,
-        );
+        return self::make(Features::CashOnDelivery, $amount, strtoupper($currency), "$iban|$bic|$accountHolder", $paymentReference);
     }
 
     public static function cashOnDeliveryInternational(int|float|string $amount, string $currency, string $iban, string $bic, string $accountHolder, string $paymentReference): static
     {
-        return self::make(
-            Features::CashOnDeliveryInternational,
-            $amount,
-            strtoupper($currency),
-            "$iban|$bic|$accountHolder",
-            $paymentReference,
-        );
+        return self::make(Features::CashOnDeliveryInternational, $amount, strtoupper($currency), "$iban|$bic|$accountHolder", $paymentReference);
     }
 
     public static function valueShipment(int|float|string $amount, string $currency): static
@@ -76,9 +77,9 @@ class FeatureRow extends Data
         return self::make(Features::SenderNotification, $emailOrPhone);
     }
 
-    public static function additionalInsurance(int|float|string $amount, string $currency): static
+    public static function additionalInsurance(int|float|string $amount, ?string $currency = null): static
     {
-        return self::make(Features::AdditionalInsurance, $amount, strtoupper($currency));
+        return self::make(Features::AdditionalInsurance, $amount, $currency === null ? null : strtoupper($currency));
     }
 
     public static function posteRestante(int|string|null $branchCode = null): static
@@ -151,14 +152,14 @@ class FeatureRow extends Data
         return self::make(Features::ParcelInternationalFast);
     }
 
-    public static function shortStoragePeriod(): static
+    public static function shortStoragePeriod(int $days): static
     {
-        return self::make(Features::ShortStoragePeriod);
+        return self::make(Features::ShortStoragePeriod, $days);
     }
 
-    public static function limitedQuantityDangerousGoods(): static
+    public static function limitedQuantityDangerousGoods(int|string $unNumber): static
     {
-        return self::make(Features::LimitedQuantityDangerousGoods);
+        return self::make(Features::LimitedQuantityDangerousGoods, $unNumber);
     }
 
     public static function reusableBoxSmall(): static
@@ -184,6 +185,51 @@ class FeatureRow extends Data
     public static function lateDelivery(): static
     {
         return self::make(Features::LateDelivery);
+    }
+
+    public static function returnReceipt(): static
+    {
+        return self::make(Features::ReturnReceipt);
+    }
+
+    public static function saturdayExpress(): static
+    {
+        return self::make(Features::SaturdayExpress);
+    }
+
+    public static function middayExpress(): static
+    {
+        return self::make(Features::MiddayExpress);
+    }
+
+    public static function preferredTimeWindow(string $timeWindow): static
+    {
+        return self::make(Features::PreferredTimeWindow, $timeWindow);
+    }
+
+    public static function registeredMail(): static
+    {
+        return self::make(Features::RegisteredMail);
+    }
+
+    public static function preferredDay(): static
+    {
+        return self::make(Features::PreferredDay);
+    }
+
+    public static function businessParcelStamp(): static
+    {
+        return self::make(Features::BusinessParcelStamp);
+    }
+
+    public static function signatureRequired(): static
+    {
+        return self::make(Features::SignatureRequired);
+    }
+
+    public static function eco(): static
+    {
+        return self::make(Features::Eco);
     }
 
     public static function immediateReturn(): static

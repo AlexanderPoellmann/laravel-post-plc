@@ -8,7 +8,10 @@ use AlexanderPoellmann\LaravelPostPlc\Contracts\PlcTransport;
 use AlexanderPoellmann\LaravelPostPlc\Enums\ServiceMethods;
 use AlexanderPoellmann\LaravelPostPlc\Facades\LaravelPostPlc as PlcFacade;
 use AlexanderPoellmann\LaravelPostPlc\LaravelPostPlc;
+use AlexanderPoellmann\LaravelPostPlc\Policies\ServicePolicy;
 use AlexanderPoellmann\LaravelPostPlc\Resolvers\AllowedServicesResolver;
+use AlexanderPoellmann\LaravelPostPlc\Returns\ReturnLabelService;
+use AlexanderPoellmann\LaravelPostPlc\Returns\ReturnShipmentFactory;
 use AlexanderPoellmann\LaravelPostPlc\Tests\Support\FakePlcTransport;
 use AlexanderPoellmann\LaravelPostPlc\Validation\PickupOrderValidator;
 use AlexanderPoellmann\LaravelPostPlc\Validation\ShipmentValidator;
@@ -17,6 +20,7 @@ it('shares the client within a scope and discards response state between scopes'
     app()->instance(PlcTransport::class, FakePlcTransport::responding(['pdfData' => 'private-label']));
     $client = app(LaravelPostPlc::class);
     $resolver = app(AllowedServicesResolver::class);
+    $policy = app(ServicePolicy::class);
 
     PlcFacade::request(ServiceMethods::ImportShipment, []);
 
@@ -27,6 +31,7 @@ it('shares the client within a scope and discards response state between scopes'
 
     expect(app(LaravelPostPlc::class))->not->toBe($client)
         ->and(app(AllowedServicesResolver::class))->not->toBe($resolver)
+        ->and(app(ServicePolicy::class))->not->toBe($policy)
         ->and(PlcFacade::getResponse())->toBeNull()
         ->and(PlcFacade::lastMethod())->toBeNull();
 });
@@ -38,7 +43,10 @@ it('loads package config and registers package services', function (): void {
         ->and(app(CustomsRequirementResolver::class))->toBeInstanceOf(CustomsRequirementResolver::class)
         ->and(app(ShipmentValidator::class))->toBeInstanceOf(ShipmentValidator::class)
         ->and(app(PickupOrderValidator::class))->toBeInstanceOf(PickupOrderValidator::class)
-        ->and(app(AllowedServicesResolver::class))->toBeInstanceOf(AllowedServicesResolver::class);
+        ->and(app(AllowedServicesResolver::class))->toBeInstanceOf(AllowedServicesResolver::class)
+        ->and(app(ServicePolicy::class))->toBeInstanceOf(ServicePolicy::class)
+        ->and(app(ReturnShipmentFactory::class))->toBeInstanceOf(ReturnShipmentFactory::class)
+        ->and(app(ReturnLabelService::class))->toBeInstanceOf(ReturnLabelService::class);
 });
 
 it('keeps the legacy services configuration as a fallback', function (): void {

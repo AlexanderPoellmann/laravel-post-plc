@@ -30,6 +30,10 @@ class AddressRow extends Data
         public readonly ?string $Homepage,
         public readonly ?string $EORINumber,
         public readonly ?string $PersonalTaxNumber,
+        public readonly ?string $AuthorizedExporterIdentificationNumber = null,
+        public readonly ?string $CustomsDutyAccountNumber = null,
+        public readonly ?string $CustomsTaxAccountNumber = null,
+        public readonly ?string $ProvinceCode = null,
     ) {}
 
     public function hasPhone(): bool

@@ -7,8 +7,11 @@ namespace AlexanderPoellmann\LaravelPostPlc;
 use AlexanderPoellmann\LaravelPostPlc\Configuration\PlcConfiguration;
 use AlexanderPoellmann\LaravelPostPlc\Contracts\CustomsRequirementResolver;
 use AlexanderPoellmann\LaravelPostPlc\Contracts\PlcTransport;
+use AlexanderPoellmann\LaravelPostPlc\Policies\ServicePolicy;
 use AlexanderPoellmann\LaravelPostPlc\Resolvers\AllowedServicesResolver;
 use AlexanderPoellmann\LaravelPostPlc\Resolvers\EuCustomsRequirementResolver;
+use AlexanderPoellmann\LaravelPostPlc\Returns\ReturnLabelService;
+use AlexanderPoellmann\LaravelPostPlc\Returns\ReturnShipmentFactory;
 use AlexanderPoellmann\LaravelPostPlc\Transport\SoapPlcTransport;
 use AlexanderPoellmann\LaravelPostPlc\Validation\PickupOrderValidator;
 use AlexanderPoellmann\LaravelPostPlc\Validation\ShipmentValidator;
@@ -37,6 +40,9 @@ class LaravelPostPlcServiceProvider extends PackageServiceProvider
         $this->app->singleton(PickupOrderValidator::class);
 
         $this->app->singleton(ShipmentValidator::class);
+        $this->app->scoped(ServicePolicy::class, fn (): ServicePolicy => ServicePolicy::fromConfig());
         $this->app->scoped(AllowedServicesResolver::class);
+        $this->app->scoped(ReturnShipmentFactory::class);
+        $this->app->scoped(ReturnLabelService::class);
     }
 }

@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace AlexanderPoellmann\LaravelPostPlc\Support;
 
 use AlexanderPoellmann\LaravelPostPlc\Enums\PostProductCodes;
+use AlexanderPoellmann\LaravelPostPlc\ValueObjects\FeatureCode;
+use AlexanderPoellmann\LaravelPostPlc\ValueObjects\ProductCode;
 use BackedEnum;
 use DateTimeInterface;
 use Illuminate\Contracts\Support\Arrayable;
@@ -48,6 +50,10 @@ final class PayloadNormalizer
 
         if ($value instanceof PostProductCodes) {
             return $value->apiValue();
+        }
+
+        if ($value instanceof ProductCode || $value instanceof FeatureCode) {
+            return $value->value;
         }
 
         if ($value instanceof BackedEnum) {

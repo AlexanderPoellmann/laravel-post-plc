@@ -97,10 +97,20 @@ it('applies the Germany branch-key exception', function (): void {
     $shipment = (new Shipment)
         ->using(PostProductCodes::NextDay)
         ->to(ShipmentFixtures::address('DE', true))
-        ->withFeatures([FeatureRow::preferredPickupBranch('123')])
+        ->withFeatures([FeatureRow::posteRestante('123')])
         ->get();
 
     expect(app(ShipmentValidator::class)->validate($shipment)->has('feature.germany_branch_key'))->toBeTrue();
+});
+
+it('accepts v2 insurance without a currency and German pickup branch keys', function (): void {
+    $shipment = (new Shipment)
+        ->using(PostProductCodes::NextDay)
+        ->to(ShipmentFixtures::address('DE', true))
+        ->withFeatures([FeatureRow::additionalInsurance(100), FeatureRow::preferredPickupBranch('123')])
+        ->get();
+
+    expect(app(ShipmentValidator::class)->validate($shipment)->isValid())->toBeTrue();
 });
 
 it('requires both phone and email for Next Day', function (): void {

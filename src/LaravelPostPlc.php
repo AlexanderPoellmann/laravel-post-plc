@@ -6,8 +6,11 @@ namespace AlexanderPoellmann\LaravelPostPlc;
 
 use AlexanderPoellmann\LaravelPostPlc\Configuration\PlcConfiguration;
 use AlexanderPoellmann\LaravelPostPlc\Contracts\PlcTransport;
+use AlexanderPoellmann\LaravelPostPlc\DataTransferObjects\CompleteGroupageShipmentResult;
 use AlexanderPoellmann\LaravelPostPlc\DataTransferObjects\ImportShipmentAndGenerateBarcodeResult;
+use AlexanderPoellmann\LaravelPostPlc\DataTransferObjects\ImportShipmentForceResult;
 use AlexanderPoellmann\LaravelPostPlc\DataTransferObjects\ImportShipmentResult;
+use AlexanderPoellmann\LaravelPostPlc\DataTransferObjects\ImportShipmentReturnImageResult;
 use AlexanderPoellmann\LaravelPostPlc\Enums\ServiceMethods;
 use AlexanderPoellmann\LaravelPostPlc\Exceptions\InvalidPlcConfiguration;
 use AlexanderPoellmann\LaravelPostPlc\Support\PayloadNormalizer;
@@ -34,6 +37,20 @@ class LaravelPostPlc
     public function endpoint(): string
     {
         return $this->configuration->endpoint();
+    }
+
+    public function configuration(): PlcConfiguration
+    {
+        return $this->configuration;
+    }
+
+    public function forProfile(string|PlcConfiguration $profile): self
+    {
+        $configuration = $profile instanceof PlcConfiguration
+            ? $profile
+            : PlcConfiguration::fromConfig($profile);
+
+        return new self($configuration, $this->transport);
     }
 
     public function getIdentifier(): string
@@ -141,6 +158,9 @@ class LaravelPostPlc
         return match ($this->method) {
             ServiceMethods::ImportShipment => ImportShipmentResult::from($this->toArray()),
             ServiceMethods::ImportShipmentAndGenerateBarcode => ImportShipmentAndGenerateBarcodeResult::from($this->toArray()),
+            ServiceMethods::ImportShipmentReturnImage => ImportShipmentReturnImageResult::from($this->toArray()),
+            ServiceMethods::ImportShipmentForce => ImportShipmentForceResult::from($this->toArray()),
+            ServiceMethods::CompleteGroupageShipment => CompleteGroupageShipmentResult::from($this->toArray()),
             null => throw new LogicException('No PLC call has been made yet.'),
             default => throw new LogicException(sprintf(
                 'No built-in response DTO is registered for %s. Use toArray(), toCollection(), or toData(YourData::class).',

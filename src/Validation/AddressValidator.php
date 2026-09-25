@@ -41,9 +41,9 @@ final class AddressValidator
             'Name2' => [$address->Name2, 100],
             'Name3' => [$address->Name3, 50],
             'Name4' => [$address->Name4, 50],
-            'AddressLine1' => [$address->AddressLine1, 60],
+            'AddressLine1' => [$address->AddressLine1, 100],
             'HouseNumber' => [$address->HouseNumber, 20],
-            'AddressLine2' => [$address->AddressLine2, 60],
+            'AddressLine2' => [$address->AddressLine2, 100],
             'PostalCode' => [$address->PostalCode, 15],
             'CountryID' => [$address->CountryID, 2],
             'City' => [$address->City, 100],
@@ -52,8 +52,12 @@ final class AddressValidator
             'Fax' => [$address->Fax, 100],
             'Email' => [$address->Email, 100],
             'Homepage' => [$address->Homepage, 100],
-            'EORINumber' => [$address->EORINumber, 17],
+            'EORINumber' => [$address->EORINumber, 50],
             'PersonalTaxNumber' => [$address->PersonalTaxNumber, 20],
+            'AuthorizedExporterIdentificationNumber' => [$address->AuthorizedExporterIdentificationNumber, 50],
+            'CustomsDutyAccountNumber' => [$address->CustomsDutyAccountNumber, 50],
+            'CustomsTaxAccountNumber' => [$address->CustomsTaxAccountNumber, 50],
+            'ProvinceCode' => [$address->ProvinceCode, 10],
         ];
 
         foreach ($values as $field => [$value, $limit]) {

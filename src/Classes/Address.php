@@ -172,6 +172,34 @@ class Address extends PlcBase
         return $this;
     }
 
+    public function authorizedExporterIdentificationNumber(string $number): self
+    {
+        $this->add('AuthorizedExporterIdentificationNumber', trim($number));
+
+        return $this;
+    }
+
+    public function customsDutyAccountNumber(string $number): self
+    {
+        $this->add('CustomsDutyAccountNumber', trim($number));
+
+        return $this;
+    }
+
+    public function customsTaxAccountNumber(string $number): self
+    {
+        $this->add('CustomsTaxAccountNumber', trim($number));
+
+        return $this;
+    }
+
+    public function provinceCode(string $code): self
+    {
+        $this->add('ProvinceCode', strtoupper(trim($code)));
+
+        return $this;
+    }
+
     /** @deprecated Use taxNumber(). */
     public function tax_number(string $tax_number): self
     {

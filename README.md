@@ -11,30 +11,23 @@ A Laravel integration for the Austrian Post Label Center (Post Label Center / PL
 
 The official API description and example requests, responses, and labels can be downloaded from Austrian Post's [Post Label Center documentation downloads](https://www.post.at/g/c/post-labelcenter-dokumente).
 
+The package models the current PLC API v2.0 contract (26 February 2025), including all 14 documented service methods, 22 current products and 49 additional-service codes. Legacy product constants from earlier PLC documentation remain available for existing customer contracts.
+
+Austrian Post PLC documentation: https://www.post.at/g/c/post-labelcenter-dokumente
+
 ## Installation
 
 ```bash
 composer require alexanderpoellmann/laravel-post-plc
 ```
 
-Publish the configuration when you want to customize endpoints or customs-country handling:
+Publish the configuration when you want to customize endpoints, capability caching, product policy or customs-country handling:
 
 ```bash
 php artisan vendor:publish --tag="laravel-post-plc-config"
 ```
 
-Or alternatively, add the following entry to your `config/services.php` file:
-
-```php
-    'post-plc' => [
-        'client-id'     => env('PLC_CLIENT_ID'),
-        'org-unit-id'   => env('PLC_ORG_UNIT_ID'),
-        'org-unit-guid' => env('PLC_ORG_UNIT_GUID'),
-        'sandbox'       => env('PLC_SANDBOX', false),
-    ],
-```
-
-Configure credentials in `.env`:
+Configure the default PLC account in `.env`:
 
 ```dotenv
 PLC_CLIENT_ID=
@@ -43,6 +36,8 @@ PLC_ORG_UNIT_GUID=
 PLC_IDENTIFIER="My Application"
 PLC_SANDBOX=true
 ```
+
+The legacy `services.post-plc` configuration remains supported as a fallback.
 
 ## Build and import a shipment
 
@@ -55,8 +50,7 @@ use AlexanderPoellmann\LaravelPostPlc\Enums\PostProductCodes;
 use AlexanderPoellmann\LaravelPostPlc\Enums\ServiceMethods;
 use AlexanderPoellmann\LaravelPostPlc\Facades\LaravelPostPlc;
 
-$from = (new Address())
-    ->id('SHIPPER-1')
+$from = (new Address)
     ->name('Absender GmbH')
     ->street('Rochusmarkt 5')
     ->postCode('1030')
@@ -66,8 +60,7 @@ $from = (new Address())
     ->email('shipping@example.com')
     ->get();
 
-$to = (new Address())
-    ->id('RECIPIENT-1')
+$to = (new Address)
     ->name('Musterfirma GmbH', 'c/o Maria Muster')
     ->street('Landesgerichtsstraße 1')
     ->postCode('1010')
@@ -76,7 +69,7 @@ $to = (new Address())
     ->email('recipient@example.com')
     ->get();
 
-$shipment = (new Shipment())
+$shipment = (new Shipment)
     ->withPrinter()
     ->withNumber('ORDER-12345')
     ->using(PostProductCodes::PaketPremiumOesterreichB2B)
@@ -93,133 +86,253 @@ $shipment = (new Shipment())
         ),
     ])
     ->parcels([
-        (new Collo())->weight(0.4)->get(),
+        (new Collo)->weight(0.4)->get(),
     ])
     ->get();
 
-LaravelPostPlc::call(ServiceMethods::ImportShipment, $shipment, as_row: true);
+LaravelPostPlc::request(ServiceMethods::ImportShipment, $shipment, asRow: true);
 
-$result = LaravelPostPlc::toCollection();
+$result = LaravelPostPlc::toObject();
 ```
 
-`withPrinter()` uses the PLC specification defaults (`100x200`, `2xA5inA4`, PDF/UTF) unless you override them.
+`withPrinter()` uses the PLC defaults (`100x200`, `2xA5inA4`, PDF/UTF) unless overridden.
 
 ## Validate before sending
 
-PLC has a number of cross-field rules that are difficult to express in DTO types alone. `ShipmentValidator` performs deterministic preflight validation and returns all detected incompatibilities at once.
+`ShipmentValidator` performs deterministic PLC preflight validation and returns all detected incompatibilities at once:
 
 ```php
 use AlexanderPoellmann\LaravelPostPlc\Validation\ShipmentValidator;
 
 $validation = app(ShipmentValidator::class)->validate($shipment);
-
 $validation->throwIfInvalid();
 ```
 
-Examples covered by local validation include:
+Local validation covers documented address lengths, domestic/international route scope for known products, contact requirements, incompatible delivery features, weights, return settings, COD/insurance data, German branch handling and customs/article rules.
 
-- domestic/international product scope where PLC defines it unambiguously;
-- sender/recipient address shape and documented field lengths;
-- preferred branch/station contact requirements;
-- incompatible personal-delivery / COD / pickup-station combinations;
-- Next Day phone + email requirements;
-- product weight requirements;
-- return-day consistency;
-- COD/insured-value amounts and currency fields;
-- German branch/station/poste-restante special handling;
-- customs contacts, article completeness, HS tariff format and single-currency rules;
-- sender/recipient Austria relationship rules documented by PLC.
+The PLC service remains authoritative for rules that depend on the active customer setup, postcode, current Austrian Post configuration or contract-specific server logic.
 
-Each error has a machine-friendly `code`, a `path`, and a human-readable `message`. Where a PLC error code maps cleanly to the preflight rule, that PLC code is used.
+## Customer-specific products and features
 
-`AddressValidator` contains the shared address rules. You can use it directly with `app(AddressValidator::class)->validate($address)`; both `ShipmentValidator` and `PickupOrderValidator` also apply these rules to their addresses.
-
-## Resolve customer-specific allowed products and features
-
-Some compatibility rules depend on the PLC contract/customer configuration and cannot be reliably hard-coded. Query PLC first and combine that result with the local validator:
+Use PLC's `GetAllowedServicesForCountry` as the live capability catalog:
 
 ```php
 use AlexanderPoellmann\LaravelPostPlc\Resolvers\AllowedServicesResolver;
-use AlexanderPoellmann\LaravelPostPlc\Validation\ShipmentValidator;
 
-$allowed = app(AllowedServicesResolver::class)->forShipment($shipment);
+$capabilities = app(AllowedServicesResolver::class)->forCountries('DE');
 
-$validation = app(ShipmentValidator::class)->validate($shipment, $allowed);
-$validation->throwIfInvalid();
+foreach ($capabilities->products() as $product) {
+    $product->code->value;
+    $product->name;
+    $product->contractProduct; // PLC's "Vertragsprodukt Ja/Nein" flag
+    $product->order;
+    $product->featureCodes();
+}
+
+$capabilities->allowsProduct('45');
+$capabilities->allowsFeature('45', '054');
 ```
 
-`AllowedServicesResolver` uses PLC's `GetAllowedServicesForCountry` service. The actual shipment import remains authoritative for postcode-level, contract-level, and other server-side rules that are not exposed by product discovery.
+Capability discovery is cached by PLC account, endpoint and countries by default. Configure `post-plc.capabilities.cache.ttl`, refresh the cached result with `forCountries('DE', fresh: true)`, or invalidate a country with `forget('DE')`. A PLC discovery error throws `PlcRequestException` and is never cached as an empty catalog.
 
-Omit the allowed-services argument (or pass `null`) to run only local checks. An explicitly supplied empty discovery result allows no products and produces validation error `10055`. Discovery rejects malformed country codes before sending a request.
+`Contract` is exposed as PLC metadata (`contractProduct`); the package does not interpret it as proof that a commercial product is contracted for the customer.
 
-## Customs articles
+### Merchant product policy
 
-Use the customs factories to make the distinction between document-only and goods declarations explicit:
+Applications often need to hide a subset of products/features even when PLC returns them. Configure this separately from PLC's live capability result:
 
 ```php
-use AlexanderPoellmann\LaravelPostPlc\DataTransferObjects\ColloArticleRow;
-use AlexanderPoellmann\LaravelPostPlc\Enums\Units;
+// config/post-plc.php
+'capabilities' => [
+    'policy' => [
+        'enabled_products' => ['10', '45'],
+        'disabled_products' => [],
+        'disabled_features' => [
+            '*' => ['006'],      // disable COD globally
+            '45' => ['054'],     // disable sender info on this product
+        ],
+        'preferred_products' => [
+            'AT' => '10',
+            'DE' => '45',
+            '*' => '70',
+        ],
+        'fallback_product' => null,
+    ],
+],
+```
 
-$documents = ColloArticleRow::documents('Contract documents');
+```php
+use AlexanderPoellmann\LaravelPostPlc\Policies\ServicePolicy;
 
-$goods = ColloArticleRow::goods(
-    description: 'T-Shirt',
-    quantity: 2,
-    unit: Units::Stueck,
-    hsTariffNumber: '610910',
-    countryOfOrigin: 'AT',
-    valuePerUnit: 24.90,
-    currency: 'EUR',
-    netWeight: 0.2,
+$policy = app(ServicePolicy::class);
+
+$policy->allowsProduct($capabilities, '45');
+$policy->allowsFeature($capabilities, '45', '054');
+$preferred = $policy->preferredProduct($capabilities, 'DE');
+```
+
+This keeps three concerns separate: what PLC currently offers, what the merchant enables, and what the shipment validator allows for a concrete shipment.
+
+## Forward-compatible product and feature codes
+
+Enums cover every product and additional service in PLC API v2.0, but the wire boundary is intentionally not limited to enums. If Austrian Post introduces a new code before this package is released again, pass it through `ProductCode`, `FeatureCode`, or a raw string:
+
+```php
+use AlexanderPoellmann\LaravelPostPlc\ValueObjects\ProductCode;
+
+$shipment = (new Shipment)
+    ->using(ProductCode::from('NEW-PRODUCT'))
+    ->to($to)
+    ->get();
+
+FeatureRow::make('999', 'value');
+```
+
+Known codes remain available through `PostProductCodes` and `Features`. `PostProductCodes::apiValue()` preserves leading-zero codes such as `01` and `04`.
+
+## Return labels
+
+The package exposes the PLC return workflow as a first-class service instead of requiring callers to manually choose SOAP method names.
+
+### Domestic printable return
+
+```php
+use AlexanderPoellmann\LaravelPostPlc\Returns\ReturnLabelService;
+use AlexanderPoellmann\LaravelPostPlc\Returns\ReturnShipmentFactory;
+
+$returnShipment = app(ReturnShipmentFactory::class)->fromAddresses(
+    sender: $customerAddress,
+    recipient: $warehouseAddress,
+);
+
+$result = app(ReturnLabelService::class)->createLabel($returnShipment);
+
+$pdf = $result->pdfData;
+```
+
+For an Austrian sender and Austrian return recipient, the factory defaults to `Retourpaket` (`28`) and a PDF printer. The service validates the shipment before sending it. Inspect `errorCode` and `errorMessage` on the returned DTO before using its label data.
+
+### QR / paperless domestic return
+
+```php
+$result = app(ReturnLabelService::class)->createQr($returnShipment);
+
+$qrPngBase64 = $result->qrCode;
+$code128Base64 = $result->code128;
+```
+
+This uses `ImportShipmentAndGenerateBarcode`. PLC API v2.0 documents QR generation for Retourpaket National and Paketmarken. Shipments with `FeatureRow::businessParcelStamp()` can also use `createQr()`.
+
+### Create a return from an outbound shipment
+
+```php
+$returnShipment = app(ReturnShipmentFactory::class)->fromOutbound(
+    outbound: $originalShipment,
+    returnRecipient: $warehouseAddress,
 );
 ```
 
-The default customs resolver uses country-level EU membership. Customs territories can differ from ISO-country boundaries, so applications with territory-specific routing can replace the `CustomsRequirementResolver` binding.
-
-## Other PLC operations
-
-Typed request DTOs are included for the remaining documented PLC methods, including address import, end-of-day operations, shipment cancellation, allowed-service discovery and pickup-order operations.
+The original recipient becomes the return sender. For international returns the factory deliberately requires an explicit product because PLC currently documents three international return variants (`04`, `63`, `66`) and the correct choice depends on the customer contract/workflow:
 
 ```php
-use AlexanderPoellmann\LaravelPostPlc\DataTransferObjects\Requests\CancelPickupOrderRequest;
-use AlexanderPoellmann\LaravelPostPlc\Enums\ServiceMethods;
+use AlexanderPoellmann\LaravelPostPlc\Enums\PostProductCodes;
 
-$request = new CancelPickupOrderRequest(
-    clientID: LaravelPostPlc::getClientId(),
-    orgUnitID: LaravelPostPlc::getOrgUnitId(),
-    orgUnitGuid: LaravelPostPlc::getOrgUnitGuid(),
-    pickupOrderNumber: 'PO-123',
+$returnShipment = app(ReturnShipmentFactory::class)->fromOutbound(
+    $originalShipment,
+    $warehouseAddress,
+    PostProductCodes::RetourpaketInternationalStandard,
+    parcels: [(new \AlexanderPoellmann\LaravelPostPlc\Classes\Collo)->weight(1.2)->get()],
 );
-
-$response = LaravelPostPlc::request(ServiceMethods::CancelPickupOrder, $request);
-$data = LaravelPostPlc::toArray();
 ```
 
-For custom response DTOs, use `LaravelPostPlc::toData(YourData::class)`. `toObject()` remains available for the shipment import methods with built-in response DTOs.
+Supply the return parcel weights explicitly; outbound tracking codes and contents are not copied. Returns across a customs border also need the appropriate article data and sender/recipient contacts.
 
-The client retains only the most recent call's response within the current Laravel request or queue job. Starting another call clears the previous response, including when serialization or transport fails. After a failed call, `getResponse()` returns `null`, `toArray()` returns an empty array, and `toObject()` throws a `LogicException`. Transport exceptions propagate to the caller.
+## Multiple PLC accounts / profiles
 
-Array requests may contain nested Laravel collections and Spatie data collections. Normalization preserves their contents, removes null request values, and keeps list indexes consecutive. Response normalization retains null values.
-
-## Product and feature helpers
-
-`PostProductCodes::apiValue()` returns the exact PLC identifier. This matters for Post Express Österreich, whose PLC code is `01` rather than integer `1`.
+The top-level configuration still represents the default account. Multi-store or multi-tenant applications can define named profiles:
 
 ```php
-PostProductCodes::PostExpressOesterreich->apiValue(); // "01"
-PostProductCodes::PaketPremiumInternational->requiresWeight();
-PostProductCodes::PaketPremiumOesterreichB2B->forBusinessOnly();
+// config/post-plc.php
+'profiles' => [
+    'store-b' => [
+        'client_id' => env('PLC_STORE_B_CLIENT_ID'),
+        'org_unit_id' => env('PLC_STORE_B_ORG_UNIT_ID'),
+        'org_unit_guid' => env('PLC_STORE_B_ORG_UNIT_GUID'),
+        'identifier' => 'Store B',
+        'sandbox' => false,
+    ],
+],
 ```
-
-Feature helpers cover the documented additional services:
 
 ```php
-FeatureRow::fragile();
-FeatureRow::personalDelivery();
-FeatureRow::preferredPickupStation('12345');
-FeatureRow::postBox('12345', '42');
-FeatureRow::preferredNeighbor('Maria Muster', 'Musterstraße 1');
+use AlexanderPoellmann\LaravelPostPlc\LaravelPostPlc;
+
+$client = app(LaravelPostPlc::class)->forProfile('store-b');
 ```
+
+The returned client has independent credentials and response state while reusing the configured transport.
+
+Use that client when constructing profile-specific helpers:
+
+```php
+$factory = new ReturnShipmentFactory($client);
+$labels = new ReturnLabelService($client, app(ShipmentValidator::class));
+$capabilities = new AllowedServicesResolver($client, app(\Illuminate\Contracts\Cache\Repository::class));
+```
+
+`default_profile` selects the profile used by container-resolved services. Merchant policy preferences are tried in order: the destination country, `*`, then `fallback_product`; unavailable or disabled candidates are skipped.
+
+## PLC API v2.0 operations
+
+The current service enum contains every operation documented by PLC API v2.0:
+
+- `ImportShipment`
+- `ImportShipmentAndGenerateBarcode`
+- `ImportShipmentReturnImage`
+- `ImportShipmentForce`
+- `ImportAddress`
+- `PerformEndOfDay`
+- `PerformEndOfDaySelect`
+- `CancelShipments`
+- `GetAllowedServicesForCountry`
+- `GetAvailableTimeWindowsForPickupOrder`
+- `ImportPickupOrderBusiness`
+- `CancelPickupOrder`
+- `BuildGroupageShipment`
+- `CompleteGroupageShipment`
+
+Typed DTOs are provided for groupage rows/requests, pickup orders and the image/force shipment responses. The old `ImportPickupOrder` enum/request remains available only for source compatibility with earlier package versions; new integrations should use `ImportPickupOrderBusiness`.
+
+Response DTOs accept SOAP collection wrappers with one or multiple parcels, tracking codes and images. `toArray()` preserves the raw response structure. Printer languages include `PDF`, `ZPL2`, `JPEG`, `GIF`, `PNG`, `PDFZPL2` and `None`.
+
+## Customs and importer data
+
+API v2.0 importer and customs address fields are supported, including `OUImporterAddress`, authorized exporter identification, customs duty/tax account numbers and province codes:
+
+```php
+$importer = (new Address)
+    ->name('Importer GmbH')
+    ->street('Importweg 1')
+    ->postCode('1010')
+    ->city('Wien')
+    ->countryCode('AT')
+    ->customsDutyAccountNumber('...')
+    ->customsTaxAccountNumber('...')
+    ->provinceCode('AT-9')
+    ->get();
+
+$shipment = (new Shipment)
+    // ...
+    ->importer($importer)
+    ->referenceBarcodeType('C')
+    ->get();
+```
+
+Use `ColloArticleRow::documents()` and `ColloArticleRow::goods()` for customs contents.
+
+## Tracking / fulfillment updates
+
+Tracking is not a PLC SOAP operation. This package therefore does not invent a polling method on the PLC client. Austrian Post exposes tracking through separate customer interfaces/APIs; once credentials for that interface are available it should be integrated behind a separate tracking boundary so PLC label creation and carrier status synchronization remain independent.
 
 ## Testing and quality
 
@@ -228,6 +341,8 @@ composer test
 composer analyse
 composer format:test
 ```
+
+The test suite uses Pest and isolates the SOAP boundary through `PlcTransport`.
 
 ## Changelog
 

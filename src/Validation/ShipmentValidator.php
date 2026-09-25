@@ -37,6 +37,10 @@ final readonly class ShipmentValidator
             $result->merge($this->addressValidator->validate($shipment->AlternativeReturnOrgUnitAddress, 'AlternativeReturnOrgUnitAddress'));
         }
 
+        if ($shipment->OUImporterAddress !== null) {
+            $result->merge($this->addressValidator->validate($shipment->OUImporterAddress, 'OUImporterAddress'));
+        }
+
         $this->validateProduct($shipment, $allowedServices, $result);
         $this->validateFeatures($shipment, $allowedServices, $result);
         $this->validateReturnOptions($shipment, $result);
@@ -70,6 +74,7 @@ final readonly class ShipmentValidator
             'MovementReferenceNumber' => [$shipment->MovementReferenceNumber, 50],
             'CustomsDescription' => [$shipment->CustomsDescription, 512],
             'CustomerProduct' => [$shipment->CustomerProduct, 15],
+            'RefBarcodeType' => [$shipment->RefBarcodeType, 1],
         ];
 
         foreach ($values as $field => [$value, $limit]) {
@@ -100,8 +105,8 @@ final readonly class ShipmentValidator
 
                 if ($collo->ColloCodeList !== null) {
                     foreach ($collo->ColloCodeList as $codeIndex => $code) {
-                        if (mb_strlen($code->Code) > 25) {
-                            $result->add('collo.code_too_long', sprintf('ColloList.%s.ColloCodeList.%s.Code', $colloIndex, $codeIndex), 'Collo code may not exceed 25 characters.');
+                        if (mb_strlen($code->Code) > 50) {
+                            $result->add('collo.code_too_long', sprintf('ColloList.%s.ColloCodeList.%s.Code', $colloIndex, $codeIndex), 'Collo code may not exceed 50 characters.');
                         }
                     }
                 }
@@ -109,8 +114,8 @@ final readonly class ShipmentValidator
                 if ($collo->ColloArticleList !== null) {
                     foreach ($collo->ColloArticleList as $articleIndex => $article) {
                         $base = sprintf('ColloList.%s.ColloArticleList.%s', $colloIndex, $articleIndex);
-                        if (mb_strlen($article->ArticleName) > 50) {
-                            $result->add('article.max_length', $base.'.ArticleName', 'ArticleName may not exceed 50 characters.');
+                        if (mb_strlen($article->ArticleName) > 100) {
+                            $result->add('article.max_length', $base.'.ArticleName', 'ArticleName may not exceed 100 characters.');
                         }
                         if ($article->ArticleNumber !== null && mb_strlen($article->ArticleNumber) > 20) {
                             $result->add('article.max_length', $base.'.ArticleNumber', 'ArticleNumber may not exceed 20 characters.');
@@ -123,7 +128,8 @@ final readonly class ShipmentValidator
 
     private function validateProduct(ShipmentRow $shipment, ?AllowedServices $allowedServices, ValidationResult $result): void
     {
-        $product = $shipment->DeliveryServiceThirdPartyID;
+        $productCode = $shipment->productCode();
+        $knownProduct = $productCode->known();
         $destination = $shipment->OURecipientAddress->countryCode();
         $origin = $shipment->OUShipperAddress?->countryCode() ?? 'AT';
 
@@ -131,26 +137,26 @@ final readonly class ShipmentValidator
             $result->add('10044', 'OUShipperAddress', 'At least the sender or recipient must be located in Austria.');
         }
 
-        if (! $product->isAvailableForDestination($destination)) {
+        if ($knownProduct !== null && ! $knownProduct->isAvailableForRoute($origin, $destination)) {
             $result->add(
                 '10056',
                 'DeliveryServiceThirdPartyID',
-                sprintf('Product %s is not valid for destination country %s.', $product->apiValue(), $destination),
+                sprintf('Product %s is not valid for route %s to %s.', $productCode->value, $origin, $destination),
             );
         }
 
-        if ($allowedServices !== null && ! $allowedServices->allowsProduct($product)) {
+        if ($allowedServices !== null && ! $allowedServices->allowsProduct($productCode)) {
             $result->add(
                 '10055',
                 'DeliveryServiceThirdPartyID',
-                sprintf('Product %s is not returned by GetAllowedServicesForCountry for this destination.', $product->apiValue()),
+                sprintf('Product %s is not returned by GetAllowedServicesForCountry for this destination.', $productCode->value),
             );
         }
     }
 
     private function validateFeatures(ShipmentRow $shipment, ?AllowedServices $allowedServices, ValidationResult $result): void
     {
-        if ($shipment->DeliveryServiceThirdPartyID === PostProductCodes::NextDay
+        if ($shipment->knownProduct() === PostProductCodes::NextDay
             && (! $shipment->OURecipientAddress->hasPhone() || ! $shipment->OURecipientAddress->hasEmail())) {
             $result->add('10070', 'OURecipientAddress', 'Next Day requires both a recipient phone number and email address.');
         }
@@ -166,7 +172,8 @@ final readonly class ShipmentValidator
                 continue;
             }
 
-            $code = $feature->ThirdPartyID->value;
+            $featureCode = $feature->code();
+            $code = $featureCode->value;
             $path = sprintf('FeatureList.%s', $index);
 
             if (isset($features[$code])) {
@@ -177,12 +184,12 @@ final readonly class ShipmentValidator
             $this->validateFeatureValues($feature, $shipment, $path, $result);
 
             if ($allowedServices !== null
-                && $allowedServices->allowsProduct($shipment->DeliveryServiceThirdPartyID)
-                && ! $allowedServices->allowsFeature($shipment->DeliveryServiceThirdPartyID, $feature->ThirdPartyID)) {
+                && $allowedServices->allowsProduct($shipment->productCode())
+                && ! $allowedServices->allowsFeature($shipment->productCode(), $featureCode)) {
                 $result->add(
                     '10081',
                     $path.'.ThirdPartyID',
-                    sprintf('Feature %s is not allowed for product %s.', $code, $shipment->DeliveryServiceThirdPartyID->apiValue()),
+                    sprintf('Feature %s is not allowed for product %s.', $code, $shipment->productCode()->value),
                 );
             }
         }
@@ -215,7 +222,7 @@ final readonly class ShipmentValidator
             }
         }
 
-        switch ($feature->ThirdPartyID) {
+        switch ($feature->code()->known()) {
             case Features::CashOnDelivery:
             case Features::CashOnDeliveryInternational:
                 $this->requirePositiveAmount($feature->Value1, $path.'.Value1', $result);
@@ -225,26 +232,32 @@ final readonly class ShipmentValidator
                 break;
 
             case Features::ValueShipment:
-            case Features::AdditionalInsurance:
                 $this->requirePositiveAmount($feature->Value1, $path.'.Value1', $result);
                 $this->requireCurrency($feature->Value2, $path.'.Value2', $result);
+                break;
+
+            case Features::AdditionalInsurance:
+                $this->requirePositiveAmount($feature->Value1, $path.'.Value1', $result);
+                if ($feature->Value2 !== null) {
+                    $this->requireCurrency($feature->Value2, $path.'.Value2', $result);
+                }
                 break;
 
             case Features::PreferredPickupBranch:
             case Features::PreferredPickupStation:
             case Features::PosteRestante:
-                if ($shipment->OURecipientAddress->countryCode() === 'DE') {
+                if ($feature->code()->known() === Features::PosteRestante && $shipment->OURecipientAddress->countryCode() === 'DE') {
                     if ($this->hasValue($feature->Value1)) {
-                        $result->add('feature.germany_branch_key', $path.'.Value1', 'For German branch/station/poste-restante services only the feature ID must be sent; omit the branch key.');
+                        $result->add('feature.germany_branch_key', $path.'.Value1', 'For German poste-restante delivery only the feature ID must be sent; omit the branch key.');
                     }
                 } else {
                     $this->requireNumericValue($feature->Value1, $path.'.Value1', $result);
                 }
 
-                if (in_array($feature->ThirdPartyID, [Features::PreferredPickupBranch, Features::PreferredPickupStation], true)
+                if (in_array($feature->code()->known(), [Features::PreferredPickupBranch, Features::PreferredPickupStation], true)
                     && ! $shipment->OURecipientAddress->hasPhoneOrEmail()) {
                     $result->add(
-                        $feature->ThirdPartyID === Features::PreferredPickupBranch ? '10030' : '10032',
+                        $feature->code()->known() === Features::PreferredPickupBranch ? '10030' : '10032',
                         'OURecipientAddress',
                         'Preferred branch/station delivery requires a recipient phone number or email address.',
                     );
@@ -259,6 +272,16 @@ final readonly class ShipmentValidator
             case Features::SenderNotification:
             case Features::PreferredDropLocation:
                 $this->requireValue($feature->Value1, $path.'.Value1', $result);
+                break;
+
+            case Features::ShortStoragePeriod:
+            case Features::PreferredTimeWindow:
+                $this->requireValue($feature->Value1, $path.'.Value1', $result);
+                break;
+
+            case Features::LimitedQuantityDangerousGoods:
+            case Features::PreferredDate:
+                $this->requireNumericValue($feature->Value1, $path.'.Value1', $result);
                 break;
 
             case Features::PreferredNeighbor:
@@ -285,7 +308,9 @@ final readonly class ShipmentValidator
 
     private function validateWeightRequirements(ShipmentRow $shipment, ValidationResult $result): void
     {
-        if (! $shipment->DeliveryServiceThirdPartyID->requiresWeight()) {
+        $product = $shipment->knownProduct();
+
+        if ($product === null || ! $product->requiresWeight()) {
             return;
         }
 

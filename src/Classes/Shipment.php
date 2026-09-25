@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace AlexanderPoellmann\LaravelPostPlc\Classes;
 
+use AlexanderPoellmann\LaravelPostPlc\Configuration\PlcConfiguration;
 use AlexanderPoellmann\LaravelPostPlc\DataTransferObjects\AddressRow;
 use AlexanderPoellmann\LaravelPostPlc\DataTransferObjects\ColloRow;
 use AlexanderPoellmann\LaravelPostPlc\DataTransferObjects\FeatureRow;
@@ -18,22 +19,22 @@ use AlexanderPoellmann\LaravelPostPlc\Enums\PrinterEncoding;
 use AlexanderPoellmann\LaravelPostPlc\Enums\PrinterLanguages;
 use AlexanderPoellmann\LaravelPostPlc\Enums\ReturnOptions;
 use AlexanderPoellmann\LaravelPostPlc\Enums\ReturnPaths;
-use AlexanderPoellmann\LaravelPostPlc\Facades\LaravelPostPlc;
+use AlexanderPoellmann\LaravelPostPlc\ValueObjects\ProductCode;
 use DateTimeInterface;
 
 class Shipment extends PlcBase
 {
-    public function __construct()
+    public function __construct(?PlcConfiguration $configuration = null)
     {
-        $this->setup();
+        $this->setup($configuration ?? PlcConfiguration::fromConfig());
     }
 
-    private function setup(): void
+    private function setup(PlcConfiguration $configuration): void
     {
-        $this->add('ClientID', LaravelPostPlc::getClientId());
-        $this->add('OrgUnitID', LaravelPostPlc::getOrgUnitId());
-        $this->add('OrgUnitGuid', LaravelPostPlc::getOrgUnitGuid());
-        $this->add('CustomerProduct', LaravelPostPlc::getIdentifier());
+        $this->add('ClientID', $configuration->clientId);
+        $this->add('OrgUnitID', $configuration->orgUnitId);
+        $this->add('OrgUnitGuid', $configuration->orgUnitGuid);
+        $this->add('CustomerProduct', $configuration->identifier);
     }
 
     public function withPrinter(
@@ -59,7 +60,7 @@ class Shipment extends PlcBase
         return $this;
     }
 
-    public function using(PostProductCodes $postProductCode): self
+    public function using(PostProductCodes|ProductCode|string $postProductCode): self
     {
         $this->add('DeliveryServiceThirdPartyID', $postProductCode);
 
@@ -106,6 +107,20 @@ class Shipment extends PlcBase
     public function alternativeReturnAddress(AddressRow $address): self
     {
         $this->add('AlternativeReturnOrgUnitAddress', $address);
+
+        return $this;
+    }
+
+    public function importer(AddressRow $address): self
+    {
+        $this->add('OUImporterAddress', $address);
+
+        return $this;
+    }
+
+    public function referenceBarcodeType(string $type): self
+    {
+        $this->add('RefBarcodeType', $type);
 
         return $this;
     }
