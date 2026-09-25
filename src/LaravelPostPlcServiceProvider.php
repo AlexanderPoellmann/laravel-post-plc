@@ -12,6 +12,7 @@ use AlexanderPoellmann\LaravelPostPlc\Resolvers\AllowedServicesResolver;
 use AlexanderPoellmann\LaravelPostPlc\Resolvers\EuCustomsRequirementResolver;
 use AlexanderPoellmann\LaravelPostPlc\Returns\ReturnLabelService;
 use AlexanderPoellmann\LaravelPostPlc\Returns\ReturnShipmentFactory;
+use AlexanderPoellmann\LaravelPostPlc\Shipping\PostPlcShippingAdapter;
 use AlexanderPoellmann\LaravelPostPlc\Transport\SoapPlcTransport;
 use AlexanderPoellmann\LaravelPostPlc\Validation\PickupOrderValidator;
 use AlexanderPoellmann\LaravelPostPlc\Validation\ShipmentValidator;
@@ -44,5 +45,7 @@ class LaravelPostPlcServiceProvider extends PackageServiceProvider
         $this->app->scoped(AllowedServicesResolver::class);
         $this->app->scoped(ReturnShipmentFactory::class);
         $this->app->scoped(ReturnLabelService::class);
+        $this->app->scoped(PostPlcShippingAdapter::class);
+        $this->app->tag([PostPlcShippingAdapter::class], 'shipping.adapters');
     }
 }

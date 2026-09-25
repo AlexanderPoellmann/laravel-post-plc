@@ -39,6 +39,70 @@ PLC_SANDBOX=true
 
 The legacy `services.post-plc` configuration remains supported as a fallback.
 
+## Shared shipping contracts
+
+`PostPlcShippingAdapter` implements `Carrier` and `CreatesShipments` from `alexanderpoellmann/shipping-contracts`. Its carrier identifier is `post-plc`. Select the Austrian Post product on the adapter; the shared shipment contains only addresses, parcels, an optional reference and an optional shipping date.
+
+```php
+use AlexanderPoellmann\LaravelPostPlc\Enums\PostProductCodes;
+use AlexanderPoellmann\LaravelPostPlc\Shipping\PostPlcShippingAdapter;
+use AlexanderPoellmann\Shipping\Data\Address;
+use AlexanderPoellmann\Shipping\Data\Parcel;
+use AlexanderPoellmann\Shipping\Data\Shipment;
+
+$adapter = app(PostPlcShippingAdapter::class)
+    ->forProduct(PostProductCodes::PaketOesterreich);
+
+$result = $adapter->createShipment(new Shipment(
+    sender: new Address('Sender GmbH', 'Rochusmarkt', '1030', 'Wien', 'AT', houseNumber: '5'),
+    recipient: new Address('Recipient GmbH', 'Hauptplatz', '4020', 'Linz', 'AT', houseNumber: '1'),
+    parcels: [new Parcel(weightInGrams: 1200, lengthInMillimeters: 300, widthInMillimeters: 200, heightInMillimeters: 100)],
+    reference: 'ORDER-42',
+));
+
+foreach ($result->trackingNumbers as $trackingNumber) {
+    $trackingNumber->value; // String, preserving leading zeros.
+}
+
+foreach ($result->labels as $label) {
+    $label->contents; // Decoded PDF bytes or raw ZPL text.
+    $label->mimeType;
+    $label->trackingNumber; // Null for a document covering multiple parcels.
+}
+```
+
+`forProduct()` also accepts a native `ProductCode` or string. Both `forProduct()` and `withPrinter()` return new adapters, so a configured instance can be reused without changing the container's default adapter. Printer configuration remains PLC-specific:
+
+```php
+use AlexanderPoellmann\LaravelPostPlc\Enums\LabelSizes;
+use AlexanderPoellmann\LaravelPostPlc\Enums\PaperLayouts;
+use AlexanderPoellmann\LaravelPostPlc\Enums\PrinterLanguages;
+
+$thermal = $adapter->withPrinter(
+    language: PrinterLanguages::ZPL2,
+    labelSize: LabelSizes::SHORT,
+    paperLayout: PaperLayouts::SHORT,
+);
+```
+
+The adapter supports PDF, ZPL2, PDFZPL2 and None through `ImportShipment`. JPEG, GIF and PNG require the native `ImportShipmentReturnImage` workflow and are rejected by this adapter. PDF is decoded from PLC's base64 response; ZPL remains raw text. A combined response returns both documents. The first nonblank collo code for each returned parcel becomes its tracking number; additional carrier codes remain available through the native response DTO. Documents are associated with a tracking number only when the response contains exactly one parcel and one usable code.
+
+Weights are converted from grams to kilograms. Dimensions are rounded up from millimeters to whole centimeters. The shared reference maps to both PLC `Number` and `OUShipperReference1`, so it must satisfy the 50-character `Number` limit. The shipping date maps to `ShippingDateTimeFrom` using the supplied date's local time.
+
+The adapter runs `ShipmentValidator` before sending and throws `ShipmentValidationException` for invalid PLC input. A missing product throws `LogicException`; invalid product or printer configuration throws `InvalidArgumentException`. PLC error responses and invalid PDF encoding throw `PlcRequestException`; transport exceptions propagate. Creation is not automatically retried. Use the native shipment API below for customs articles, additional services, return settings and other PLC fields that the shared shipment cannot express.
+
+Laravel registers the concrete adapter as a scoped service under the shared `shipping.adapters` tag. It does not bind `Carrier` or any capability interface globally, so applications can discover both Post and DPD adapters and select the needed concrete service:
+
+```php
+foreach (app()->tagged('shipping.adapters') as $carrier) {
+    $carrier->carrier();
+}
+```
+
+The tagged Post adapter still needs `forProduct()` before use. For a named PLC account, construct it with `new PostPlcShippingAdapter(app(\AlexanderPoellmann\LaravelPostPlc\LaravelPostPlc::class)->forProfile('store-b'))`.
+
+The Post adapter does not implement `DownloadsLabels` because it returns label contents directly, or `CancelsShipments` because native PLC cancellation needs the shipment `Number` and potentially all collo codes. Tracking, standalone label creation and pickup scheduling remain outside the shared capability API.
+
 ## Build and import a shipment
 
 ```php

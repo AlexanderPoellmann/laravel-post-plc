@@ -4,6 +4,8 @@ All notable changes to `laravel-post-plc` will be documented in this file.
 
 ## Unreleased
 
+- Add a scoped `PostPlcShippingAdapter` implementing the shared `Carrier` and `CreatesShipments` capabilities, discoverable through `shipping.adapters` without global interface bindings.
+- Keep product and printer configuration native to PLC, validate before import, normalize tracking and PDF/ZPL results, and cover adapter failures, profiles and scope isolation with regression tests.
 - Fix unknown product/feature hydration through Spatie Data and normalize wrapped SOAP response collections.
 - Refresh cached capability results on fresh lookups and surface PLC discovery errors without caching them.
 - Normalize merchant policy codes, honor available fallback products, and scope policy instances to requests/jobs.
