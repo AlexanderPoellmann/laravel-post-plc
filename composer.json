@@ -39,12 +39,6 @@
         "phpstan/phpstan-phpunit": "^2.0",
         "spatie/laravel-ray": "^1.35"
     },
-    "repositories": [
-        {
-            "type": "vcs",
-            "url": "https://github.com/alexanderpoellmann/shipping-contracts"
-        }
-    ],
     "autoload": {
         "psr-4": {
             "AlexanderPoellmann\\LaravelPostPlc\\": "src/"
