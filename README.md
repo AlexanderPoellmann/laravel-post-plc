@@ -1,4 +1,6 @@
-# A laravel integration for the Austrian Post Label Center (Österreichische Post).
+# Laravel Post PLC
+
+A Laravel integration for the Austrian Post Label Center (Post Label Center / PLC), built on Spatie's Laravel package conventions.
 
 [![Latest Version on Packagist](https://img.shields.io/packagist/v/alexanderpoellmann/laravel-post-plc.svg?style=flat-square)](https://packagist.org/packages/alexanderpoellmann/laravel-post-plc)
 [![GitHub Tests Action Status](https://img.shields.io/github/actions/workflow/status/alexanderpoellmann/laravel-post-plc/run-tests.yml?branch=main&label=tests&style=flat-square)](https://github.com/alexanderpoellmann/laravel-post-plc/actions?query=workflow%3Arun-tests+branch%3Amain)
@@ -7,13 +9,17 @@
 
 ## Installation
 
-You can install the package via composer:
-
 ```bash
 composer require alexanderpoellmann/laravel-post-plc
 ```
 
-Add the following entry to your `config/services.php` file:
+Publish the configuration when you want to customize endpoints or customs-country handling:
+
+```bash
+php artisan vendor:publish --tag="laravel-post-plc-config"
+```
+
+Or alternatively, add the following entry to your `config/services.php` file:
 
 ```php
     'post-plc' => [
@@ -24,120 +30,197 @@ Add the following entry to your `config/services.php` file:
     ],
 ```
 
-## Usage
+Configure credentials in `.env`:
+
+```dotenv
+PLC_CLIENT_ID=
+PLC_ORG_UNIT_ID=
+PLC_ORG_UNIT_GUID=
+PLC_IDENTIFIER="My Application"
+PLC_SANDBOX=true
+```
+
+## Build and import a shipment
 
 ```php
 use AlexanderPoellmann\LaravelPostPlc\Classes\Address;
 use AlexanderPoellmann\LaravelPostPlc\Classes\Collo;
 use AlexanderPoellmann\LaravelPostPlc\Classes\Shipment;
-use AlexanderPoellmann\LaravelPostPlc\Facades\LaravelPostPlc;
-use AlexanderPoellmann\LaravelPostPlc\Enums\PostProductCodes;
-use AlexanderPoellmann\LaravelPostPlc\Enums\Features;
 use AlexanderPoellmann\LaravelPostPlc\DataTransferObjects\FeatureRow;
+use AlexanderPoellmann\LaravelPostPlc\Enums\PostProductCodes;
 use AlexanderPoellmann\LaravelPostPlc\Enums\ServiceMethods;
+use AlexanderPoellmann\LaravelPostPlc\Facades\LaravelPostPlc;
 
 $from = (new Address())
-    ->id(sprintf('%05d', mt_rand(1, 10000)))
+    ->id('SHIPPER-1')
     ->name('Absender GmbH')
-    ->route('Rochusmarkt')
-    ->street_number('5')
-    ->post_code('1030')
+    ->street('Rochusmarkt 5')
+    ->postCode('1030')
     ->city('Wien')
-    ->country_code('AT')
+    ->countryCode('AT')
+    ->phone('+431234567')
+    ->email('shipping@example.com')
     ->get();
 
 $to = (new Address())
-    ->id(sprintf('%05d', mt_rand(1, 10000)))
-    ->name('Musterfirma GmbH', 'c/o Frau Maria Muster')
-    ->route('Landesgerichtsstraße')
-    ->street_number('1')
-    ->post_code('1010')
+    ->id('RECIPIENT-1')
+    ->name('Musterfirma GmbH', 'c/o Maria Muster')
+    ->street('Landesgerichtsstraße 1')
+    ->postCode('1010')
     ->city('Wien')
-    ->country_code('AT')
+    ->countryCode('AT')
+    ->email('recipient@example.com')
     ->get();
 
 $shipment = (new Shipment())
     ->withPrinter()
-    ->withNumber(sprintf('%05d', mt_rand(1, 10000)))
+    ->withNumber('ORDER-12345')
     ->using(PostProductCodes::PaketPremiumOesterreichB2B)
     ->from($from)
     ->to($to)
     ->withFeatures([
-        FeatureRow::from([
-            'ThirdPartyID' => Features::CashOnDelivery,
-            'Value1' => '199.99', // Amount (decimal)
-            'Value2' => 'EUR',    // Currency (ISO code)
-            'Value3' => 'AT99 9999 9999 9999 9999|BICCODE|Muster GmbH', // IBAN|BIC|Account holder
-            'Value4' => 'Order #12345', // Payment reference
-        ]),
+        FeatureRow::cashOnDelivery(
+            amount: 199.99,
+            currency: 'EUR',
+            iban: 'AT000000000000000000',
+            bic: 'BICCODE',
+            accountHolder: 'Muster GmbH',
+            paymentReference: 'ORDER-12345',
+        ),
     ])
     ->parcels([
-        (new Collo)->weight(0.4)->get(),
-        (new Collo)->weight(5.2)->get(),
-    ])->get();
+        (new Collo())->weight(0.4)->get(),
+    ])
+    ->get();
 
-LaravelPostPlc::call(ServiceMethods::ImportShipment, $shipment, true);
+LaravelPostPlc::call(ServiceMethods::ImportShipment, $shipment, as_row: true);
 
-$object = LaravelPostPlc::toCollection();
-
-ray($object);
+$result = LaravelPostPlc::toCollection();
 ```
 
-The `PostProductCodes` enum has a few helper methods to make it easier to decide which options you might show to your users, when creating shipments:
+`withPrinter()` uses the PLC specification defaults (`100x200`, `2xA5inA4`, PDF/UTF) unless you override them.
+
+## Validate before sending
+
+PLC has a number of cross-field rules that are difficult to express in DTO types alone. `ShipmentValidator` performs deterministic preflight validation and returns all detected incompatibilities at once.
 
 ```php
-use AlexanderPoellmann\LaravelPostPlc\Enums\PostProductCodes;
+use AlexanderPoellmann\LaravelPostPlc\Validation\ShipmentValidator;
 
-// check whether the selected product is available for Austrian addresses only
-$isDomestic = PostProductCodes::PaketOesterreich->isDomestic();
+$validation = app(ShipmentValidator::class)->validate($shipment);
 
-// check whether the selected product requires you to specify its weight
-$requiresWeight = PostProductCodes::PaketPremiumInternational->requiresWeight();
-
-// check whether the selected product is available only for business-to-business shipments
-$forBusinessOnly = PostProductCodes::PaketPremiumOesterreichB2B->forBusinessOnly();
+$validation->throwIfInvalid();
 ```
 
-The `FeatureRow` enum has a few helper methods as well, here are some examples:
+Examples covered by local validation include:
+
+- domestic/international product scope where PLC defines it unambiguously;
+- sender/recipient address shape and documented field lengths;
+- preferred branch/station contact requirements;
+- incompatible personal-delivery / COD / pickup-station combinations;
+- Next Day phone + email requirements;
+- product weight requirements;
+- return-day consistency;
+- COD/insured-value amounts and currency fields;
+- German branch/station/poste-restante special handling;
+- customs contacts, article completeness, HS tariff format and single-currency rules;
+- sender/recipient Austria relationship rules documented by PLC.
+
+Each error has a machine-friendly `code`, a `path`, and a human-readable `message`. Where a PLC error code maps cleanly to the preflight rule, that PLC code is used.
+
+## Resolve customer-specific allowed products and features
+
+Some compatibility rules depend on the PLC contract/customer configuration and cannot be reliably hard-coded. Query PLC first and combine that result with the local validator:
 
 ```php
-FeatureRow::cashOnDelivery(
-    amount: '199.99',
+use AlexanderPoellmann\LaravelPostPlc\Resolvers\AllowedServicesResolver;
+use AlexanderPoellmann\LaravelPostPlc\Validation\ShipmentValidator;
+
+$allowed = app(AllowedServicesResolver::class)->forShipment($shipment);
+
+$validation = app(ShipmentValidator::class)->validate($shipment, $allowed);
+$validation->throwIfInvalid();
+```
+
+`AllowedServicesResolver` uses PLC's `GetAllowedServicesForCountry` service. The actual shipment import remains authoritative for postcode-level, contract-level, and other server-side rules that are not exposed by product discovery.
+
+## Customs articles
+
+Use the customs factories to make the distinction between document-only and goods declarations explicit:
+
+```php
+use AlexanderPoellmann\LaravelPostPlc\DataTransferObjects\ColloArticleRow;
+use AlexanderPoellmann\LaravelPostPlc\Enums\Units;
+
+$documents = ColloArticleRow::documents('Contract documents');
+
+$goods = ColloArticleRow::goods(
+    description: 'T-Shirt',
+    quantity: 2,
+    unit: Units::Stueck,
+    hsTariffNumber: '610910',
+    countryOfOrigin: 'AT',
+    valuePerUnit: 24.90,
     currency: 'EUR',
-    iban: 'AT99 9999 9999 9999 9999',
-    bic: 'ABCDEFFXXX',
-    accountHolder: 'Muster GmbH',
-    paymentReference: 'Order #12345',
-]);
-
-FeatureRow::fragile()
-
-FeatureRow::personalDelivery()
+    netWeight: 0.2,
+);
 ```
 
-## Testing
+The default customs resolver uses country-level EU membership. Customs territories can differ from ISO-country boundaries, so applications with territory-specific routing can replace the `CustomsRequirementResolver` binding.
+
+## Other PLC operations
+
+Typed request DTOs are included for the remaining documented PLC methods, including address import, end-of-day operations, shipment cancellation, allowed-service discovery and pickup-order operations.
+
+```php
+use AlexanderPoellmann\LaravelPostPlc\DataTransferObjects\Requests\CancelPickupOrderRequest;
+use AlexanderPoellmann\LaravelPostPlc\Enums\ServiceMethods;
+
+$request = new CancelPickupOrderRequest(
+    clientID: LaravelPostPlc::getClientId(),
+    orgUnitID: LaravelPostPlc::getOrgUnitId(),
+    orgUnitGuid: LaravelPostPlc::getOrgUnitGuid(),
+    pickupOrderNumber: 'PO-123',
+);
+
+$response = LaravelPostPlc::request(ServiceMethods::CancelPickupOrder, $request);
+$data = LaravelPostPlc::toArray();
+```
+
+For custom response DTOs, use `LaravelPostPlc::toData(YourData::class)`. `toObject()` remains available for the shipment import methods with built-in response DTOs.
+
+## Product and feature helpers
+
+`PostProductCodes::apiValue()` returns the exact PLC identifier. This matters for Post Express Österreich, whose PLC code is `01` rather than integer `1`.
+
+```php
+PostProductCodes::PostExpressOesterreich->apiValue(); // "01"
+PostProductCodes::PaketPremiumInternational->requiresWeight();
+PostProductCodes::PaketPremiumOesterreichB2B->forBusinessOnly();
+```
+
+Feature helpers cover the documented additional services:
+
+```php
+FeatureRow::fragile();
+FeatureRow::personalDelivery();
+FeatureRow::preferredPickupStation('12345');
+FeatureRow::postBox('12345', '42');
+FeatureRow::preferredNeighbor('Maria Muster', 'Musterstraße 1');
+```
+
+## Testing and quality
 
 ```bash
 composer test
+composer analyse
+composer format:test
 ```
 
 ## Changelog
 
-Please see [CHANGELOG](CHANGELOG.md) for more information on what has changed recently.
-
-## Contributing
-
-Please see [CONTRIBUTING](CONTRIBUTING.md) for details.
-
-## Security Vulnerabilities
-
-Please review [our security policy](../../security/policy) on how to report security vulnerabilities.
-
-## Credits
-
-- [Alexander Manfred Pöllmann](https://github.com/AlexanderPoellmann)
-- [All Contributors](../../contributors)
+Please see [CHANGELOG](CHANGELOG.md) for changes.
 
 ## License
 
-The MIT License (MIT). Please see [License File](LICENSE.md) for more information.
+The MIT License (MIT). See [LICENSE.md](LICENSE.md).

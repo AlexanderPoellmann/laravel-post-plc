@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace AlexanderPoellmann\LaravelPostPlc\Facades;
 
 use AlexanderPoellmann\LaravelPostPlc\Enums\ServiceMethods;
@@ -16,10 +18,15 @@ use Spatie\LaravelData\Data;
  * @method static string getClientId()
  * @method static string getOrgUnitId()
  * @method static string getOrgUnitGuid()
- * @method static void call(ServiceMethods $method, Data $data, bool $as_row)
+ * @method static bool isConfigured()
+ * @method static void assertConfigured()
+ * @method static Response request(ServiceMethods $method, Data|array $data, bool $asRow = false)
+ * @method static void call(ServiceMethods $method, Data|array $data, bool $as_row = false)
  * @method static null|Response getResponse()
+ * @method static null|ServiceMethods lastMethod()
  * @method static array toArray()
  * @method static Collection toCollection()
+ * @method static Data toData(string $dataClass)
  * @method static Data toObject()
  */
 class LaravelPostPlc extends Facade

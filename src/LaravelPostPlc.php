@@ -1,80 +1,96 @@
 <?php
 
+declare(strict_types=1);
+
 namespace AlexanderPoellmann\LaravelPostPlc;
 
+use AlexanderPoellmann\LaravelPostPlc\Configuration\PlcConfiguration;
+use AlexanderPoellmann\LaravelPostPlc\Contracts\PlcTransport;
+use AlexanderPoellmann\LaravelPostPlc\DataTransferObjects\ImportShipmentAndGenerateBarcodeResult;
 use AlexanderPoellmann\LaravelPostPlc\DataTransferObjects\ImportShipmentResult;
 use AlexanderPoellmann\LaravelPostPlc\Enums\ServiceMethods;
-use Exception;
+use AlexanderPoellmann\LaravelPostPlc\Exceptions\InvalidPlcConfiguration;
+use AlexanderPoellmann\LaravelPostPlc\Support\PayloadNormalizer;
+use AlexanderPoellmann\LaravelPostPlc\Transport\SoapPlcTransport;
 use Illuminate\Support\Collection;
-use RicorocksDigitalAgency\Soap\Facades\Soap;
+use LogicException;
 use RicorocksDigitalAgency\Soap\Response\Response;
 use Spatie\LaravelData\Data;
 
 class LaravelPostPlc
 {
-    protected string $endpoint;
-
-    protected string $identifier;
-
-    protected string $client_id;
-
-    protected string $org_unit_id;
-
-    protected string $org_unit_guid;
-
-    protected bool $sandbox;
-
     protected ?ServiceMethods $method = null;
 
     protected ?Response $response = null;
 
-    public function __construct()
-    {
-        $this->identifier = config('services.post-plc.identifier', config('app.name', 'Laravel-Post-PLC'));
-        $this->client_id = config('services.post-plc.client-id', '');
-        $this->org_unit_id = config('services.post-plc.org-unit-id', '');
-        $this->org_unit_guid = config('services.post-plc.org-unit-guid', '');
-        $this->sandbox = config('services.post-plc.sandbox', false);
+    public function __construct(
+        protected ?PlcConfiguration $configuration = null,
+        protected ?PlcTransport $transport = null,
+    ) {
+        $this->configuration ??= PlcConfiguration::fromConfig();
+        $this->transport ??= new SoapPlcTransport;
     }
 
     public function endpoint(): string
     {
-        return $this->sandbox ? 'https://abn-plc.post.at/DataService/Post.Webservice/ShippingService.svc?wsdl'
-                              : 'https://plc.post.at/Post.Webservice/ShippingService.svc?wsdl';
+        return $this->configuration->endpoint();
     }
 
     public function getIdentifier(): string
     {
-        return $this->identifier;
+        return $this->configuration->identifier;
     }
 
     public function getClientId(): string
     {
-        return $this->client_id;
+        return $this->configuration->clientId;
     }
 
     public function getOrgUnitId(): string
     {
-        return $this->org_unit_id;
+        return $this->configuration->orgUnitId;
     }
 
     public function getOrgUnitGuid(): string
     {
-        return $this->org_unit_guid;
+        return $this->configuration->orgUnitGuid;
     }
 
-    public function call(ServiceMethods $method, Data $data, bool $as_row = false): void
+    public function isConfigured(): bool
     {
-        $data_array = array_filter($data->toArray());
+        return $this->configuration->isConfigured();
+    }
 
-        if (app()->environment() === 'local') {
-            info('[Post PLC] Given data.', $data_array);
+    public function assertConfigured(): void
+    {
+        if (! $this->isConfigured()) {
+            throw InvalidPlcConfiguration::missingCredentials();
         }
+    }
+
+    /**
+     * @param  Data|array<string, mixed>  $data
+     */
+    public function request(ServiceMethods $method, Data|array $data, bool $asRow = false): Response
+    {
+        $payload = PayloadNormalizer::request($data);
+        $payload = $asRow ? ['row' => $payload] : $payload;
 
         $this->method = $method;
+        $this->response = $this->transport->call($this->endpoint(), $method, $payload);
 
-        $this->response = Soap::to($this->endpoint())
-            ->call($method->value, $as_row ? ['row' => $data_array] : $data_array);
+        return $this->response;
+    }
+
+    /**
+     * Backward-compatible wrapper. New code can use request() when the raw SOAP
+     * response is useful immediately.
+     *
+     * @param  Data|array<string, mixed>  $data
+     */
+    public function call(ServiceMethods $method, Data|array $data, bool $as_row = false): void
+    {
+        $this->request($method, $data, $as_row);
     }
 
     public function getResponse(): ?Response
@@ -82,32 +98,48 @@ class LaravelPostPlc
         return $this->response;
     }
 
-    public function toArray(): array
+    public function lastMethod(): ?ServiceMethods
     {
-        $array = json_decode(json_encode($this->getResponse()), true);
-
-        return $array['response'] ?? [];
+        return $this->method;
     }
 
+    /** @return array<string, mixed> */
+    public function toArray(): array
+    {
+        if ($this->response === null) {
+            return [];
+        }
+
+        return PayloadNormalizer::response($this->response->response);
+    }
+
+    /** @return Collection<string, mixed> */
     public function toCollection(): Collection
     {
         return collect($this->toArray());
     }
 
-    /** @throws Exception */
+    /**
+     * @template T of Data
+     *
+     * @param  class-string<T>  $dataClass
+     * @return T
+     */
+    public function toData(string $dataClass): Data
+    {
+        return $dataClass::from($this->toArray());
+    }
+
     public function toObject(): Data
     {
         return match ($this->method) {
             ServiceMethods::ImportShipment => ImportShipmentResult::from($this->toArray()),
-            ServiceMethods::ImportShipmentAndGenerateBarcode,
-            ServiceMethods::GetAvailableTimeWindowsForPickupOrder,
-            ServiceMethods::GetAllowedServicesForCountry,
-            ServiceMethods::CancelShipments,
-            ServiceMethods::PerformEndOfDaySelect,
-            ServiceMethods::PerformEndOfDay,
-            ServiceMethods::ImportAddress,
-            ServiceMethods::CancelPickupOrder,
-            ServiceMethods::ImportPickupOrder => throw new Exception('To be implemented')
+            ServiceMethods::ImportShipmentAndGenerateBarcode => ImportShipmentAndGenerateBarcodeResult::from($this->toArray()),
+            null => throw new LogicException('No PLC call has been made yet.'),
+            default => throw new LogicException(sprintf(
+                'No built-in response DTO is registered for %s. Use toArray(), toCollection(), or toData(YourData::class).',
+                $this->method->value,
+            )),
         };
     }
 }

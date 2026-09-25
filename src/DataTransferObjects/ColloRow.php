@@ -1,7 +1,10 @@
 <?php
 
+declare(strict_types=1);
+
 namespace AlexanderPoellmann\LaravelPostPlc\DataTransferObjects;
 
+use Spatie\LaravelData\Attributes\DataCollectionOf;
 use Spatie\LaravelData\Data;
 use Spatie\LaravelData\DataCollection;
 
@@ -12,9 +15,9 @@ class ColloRow extends Data
         public readonly ?int $Length,
         public readonly ?int $Width,
         public readonly ?int $Height,
-        /** @var DataCollection<ColloCode> */
+        #[DataCollectionOf(ColloCode::class)]
         public readonly ?DataCollection $ColloCodeList,
-        /** @var DataCollection<ColloArticleRow> */
+        #[DataCollectionOf(ColloArticleRow::class)]
         public readonly ?DataCollection $ColloArticleList,
     ) {}
 }

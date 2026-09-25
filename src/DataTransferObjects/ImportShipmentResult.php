@@ -1,14 +1,17 @@
 <?php
 
+declare(strict_types=1);
+
 namespace AlexanderPoellmann\LaravelPostPlc\DataTransferObjects;
 
+use Spatie\LaravelData\Attributes\DataCollectionOf;
 use Spatie\LaravelData\Data;
 use Spatie\LaravelData\DataCollection;
 
 class ImportShipmentResult extends Data
 {
     public function __construct(
-        /** @var DataCollection<ColloRow> */
+        #[DataCollectionOf(ColloRow::class)]
         public readonly ?DataCollection $ImportShipmentResult,
         public readonly ?string $zplLabelData,
         public readonly ?string $pdfData,
