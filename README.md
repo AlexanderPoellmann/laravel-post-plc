@@ -7,6 +7,10 @@ A Laravel integration for the Austrian Post Label Center (Post Label Center / PL
 [![GitHub Code Style Action Status](https://img.shields.io/github/actions/workflow/status/alexanderpoellmann/laravel-post-plc/fix-php-code-style-issues.yml?branch=main&label=code%20style&style=flat-square)](https://github.com/alexanderpoellmann/laravel-post-plc/actions?query=workflow%3A"Fix+PHP+code+style+issues"+branch%3Amain)
 [![Total Downloads](https://img.shields.io/packagist/dt/alexanderpoellmann/laravel-post-plc.svg?style=flat-square)](https://packagist.org/packages/alexanderpoellmann/laravel-post-plc)
 
+## PLC documentation
+
+The official API description and example requests, responses, and labels can be downloaded from Austrian Post's [Post Label Center documentation downloads](https://www.post.at/g/c/post-labelcenter-dokumente).
+
 ## Installation
 
 ```bash
